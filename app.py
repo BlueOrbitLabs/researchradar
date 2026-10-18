@@ -1,6 +1,7 @@
 """Owlume - Your interests, your intelligence."""
 import streamlit as st
 import feedparser, requests, re, json, urllib.parse
+import hashlib, secrets
 from datetime import datetime
 import datetime as dt
 from openai import OpenAI
@@ -531,14 +532,6 @@ def build_dots_prompt():
     joined="\n".join(parts)
     return f"""Analyse these bookmarked articles and synthesise knowledge.\nARTICLES:\n{joined}\n## Common Themes\n## Surprising Connections\n## Knowledge Gaps\n## Where This Is Heading\n## What to Read Next\nBe specific. Reference actual articles."""
 
-def is_bookmarked(art): return any(bm["article"]["url"]==art["url"] for bm in st.session_state.bookmarks)
-def add_bookmark(art,cat):
-    if not is_bookmarked(art): st.session_state.bookmarks.append({"article":art,"category":cat,"saved_at":datetime.now().strftime("%d %b %Y")})
-def remove_bookmark(url): st.session_state.bookmarks=[b for b in st.session_state.bookmarks if b["article"]["url"]!=url]
-def export_bookmarks(): return json.dumps([{"title":b["article"]["title"],"url":b["article"]["url"],"topic":b["article"]["topic"],"category":b["category"],"saved_at":b["saved_at"]} for b in st.session_state.bookmarks],indent=2)
-
-LOGO_IMG_TAG = f'<img src="data:image/png;base64,{LOGO_B64}" class="owl-logo-img">' 
-
 def is_bookmarked(url): return any(b["article"]["url"] == url for b in st.session_state.bookmarks)
 def add_bookmark(art, cat):
     if not is_bookmarked(art["url"]):
@@ -580,16 +573,15 @@ ALL_INTERESTS = [
     "Gender studies","Urban planning","Migration","Social justice",
 ]
 
-if not st.session_state.onboarded:
-    st.markdown(f'<div class="ob-hero">{LOGO_IMG_TAG}<h1>Owlume</h1><div class="tagline-big">Your interests, your intelligence.</div></div>',unsafe_allow_html=True)
-
 # ── Auth helpers ──
 def handle_oauth_callback():
     code = st.query_params.get("code")
     if code and not st.session_state.user:
         try:
-            sess = supabase.auth.exchange_code_for_session({"auth_code": code})
+            verifier = st.session_state.get("pkce_verifier", "")
+            sess = supabase.auth.exchange_code_for_session({"auth_code": code, "code_verifier": verifier})
             st.session_state.user = sess.user
+            st.session_state.pkce_verifier = ""
             st.query_params.clear()
             _load_user_data_from_db(sess.user.id)
         except Exception as e:
@@ -686,12 +678,22 @@ if not st.session_state.user:
         st.markdown("### Welcome to Owlume")
         st.markdown("Sign in with Google to start your personalised research feed.")
         try:
-            res = supabase.auth.sign_in_with_oauth({
+            # Manually generate PKCE so verifier survives the redirect
+            verifier = secrets.token_urlsafe(64)
+            challenge = _b64.urlsafe_b64encode(
+                hashlib.sha256(verifier.encode()).digest()
+            ).rstrip(b"=").decode()
+            st.session_state.pkce_verifier = verifier
+            params = urllib.parse.urlencode({
                 "provider": "google",
-                "options": {"redirect_to": APP_URL, "scopes": "email profile"}
+                "redirect_to": APP_URL,
+                "scopes": "email profile",
+                "code_challenge": challenge,
+                "code_challenge_method": "s256",
             })
+            oauth_url = f"{SUPABASE_URL}/auth/v1/authorize?{params}"
             st.markdown(
-                f'''<a href="{res.url}" target="_self" style="display:inline-block;background:#2c2c6c;color:#fff;padding:12px 28px;border-radius:30px;font-weight:700;font-size:0.95rem;text-decoration:none;margin:10px 0;">🔐 Sign in with Google</a>''',
+                f'''<a href="{oauth_url}" target="_self" style="display:inline-block;background:#2c2c6c;color:#fff;padding:12px 28px;border-radius:30px;font-weight:700;font-size:0.95rem;text-decoration:none;margin:10px 0;">🔐 Sign in with Google</a>''',
                 unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Could not generate login URL: {e}")
@@ -710,13 +712,10 @@ if not st.session_state.onboarded:
         meta = st.session_state.user.user_metadata or {}
         st.session_state.user_name = meta.get("full_name", meta.get("name", ""))
 
-    col_name, col_int = st.columns([1, 2])
-    with col_name:
-        name = st.text_input("Your name", value=st.session_state.user_name, placeholder="e.g. Dr. Priya ...", key="ob_name")
-    with col_int:
-        st.markdown("<small>Areas of interest — separate with commas or type one at a time</small>", unsafe_allow_html=True)
-        interest_q = st.text_input("Areas of interest", placeholder="e.g. health economics, AI, climate ...",
-                                   key="ob_interest_q", label_visibility="collapsed", disabled=not bool(name.strip()))
+    name = st.text_input("Your name", value=st.session_state.user_name, placeholder="e.g. Dr. Priya ...", key="ob_name")
+    st.markdown("<small>Areas of interest — separate with commas or type one at a time</small>", unsafe_allow_html=True)
+    interest_q = st.text_input("Areas of interest", placeholder="e.g. health economics, AI, climate ...",
+                               key="ob_interest_q", label_visibility="collapsed", disabled=not bool(name.strip()))
 
     max_a = max_areas_for_tier()
     if name.strip() and interest_q.strip() and len(st.session_state.selected_areas) < max_a:
@@ -771,7 +770,6 @@ if not st.session_state.onboarded:
 # SOURCE SELECTION STEP — after onboarding, before main app
 # ══════════════════════════════════════════════════════════
 if st.session_state.onboarded and not st.session_state.get("sources_step_done", False):
-    st.markdown(LOGO_IMG_TAG, unsafe_allow_html=True)
     st.markdown("## 📚 Choose Your Sources")
     st.markdown("Here are recommended journals, organisations, and feeds for your areas. Follow what interests you — you can always add more later.")
 
@@ -1377,8 +1375,8 @@ with col_right:
                 st.session_state.sources_cache.pop(topic, None); st.rerun()
 
             if srcs:
-                type_order = ["Academic Journal","Industry Body","Govt/UN","Think Tank","Newsletter","News/Magazine","Keyword RSS"]
-                type_icons = {"Academic Journal":"📖","Industry Body":"🏭","Govt/UN":"🏛️","Think Tank":"💡","Newsletter":"📬","News/Magazine":"📰","Keyword RSS":"🔔"}
+                type_order = ["Academic Journal","Industry Body","Govt/UN","Organisation","Industry Portal","Think Tank","Newsletter","News/Magazine","Keyword RSS"]
+                type_icons = {"Academic Journal":"📖","Industry Body":"🏭","Govt/UN":"🏛️","Organisation":"🏢","Industry Portal":"🔗","Think Tank":"💡","Newsletter":"📬","News/Magazine":"📰","Keyword RSS":"🔔"}
                 by_type = {}
                 for s in srcs:
                     t = s.get("type","Other")
