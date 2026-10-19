@@ -1414,50 +1414,185 @@ By using Owlume you agree to use it for personal research only. Content is aggre
 # SCREEN: WELCOME
 # ═══════════════════════════════════════════════════════════
 if st.session_state.screen == "welcome":
-    st.markdown('<div class="ow-welcome-bg"></div>', unsafe_allow_html=True)
+    # ── hide Streamlit chrome, set white background ──
     st.markdown("""
-    <div class="ow-landing-nav">
-      <div class="ow-landing-brand">
-        <span style="font-size:1.5rem">🦉</span>
-        <span class="ow-landing-brand-name">Owlume</span>
+    <style>
+    [data-testid="stAppViewContainer"]{background:#ffffff !important;}
+    [data-testid="stHeader"]{display:none !important;}
+    [data-testid="stToolbar"]{display:none !important;}
+    footer{display:none !important;}
+    #MainMenu{display:none !important;}
+    .block-container{padding:0 !important;max-width:100% !important;}
+    [data-testid="stVerticalBlock"]{gap:0 !important;}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── NAV BAR ──
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:18px 48px;background:#ffffff;border-bottom:1px solid #e8edf5;
+                position:sticky;top:0;z-index:999;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="data:image/png;base64,{LOGO_B64}"
+             style="width:40px;height:40px;border-radius:10px;object-fit:contain;">
+        <span style="font-size:1.25rem;font-weight:700;color:#172554;letter-spacing:-0.5px;">Owlume</span>
       </div>
-      <div class="ow-landing-links">
-        <a href="#" class="ow-landing-link">About</a>
-        <a href="#" class="ow-landing-link">How it works</a>
-        <a href="#" class="ow-landing-link">Features</a>
+      <div style="display:flex;align-items:center;gap:32px;">
+        <a href="#" style="color:#475569;text-decoration:none;font-size:0.9rem;font-weight:500;">About</a>
+        <a href="#" style="color:#475569;text-decoration:none;font-size:0.9rem;font-weight:500;">How it works</a>
+        <a href="#" style="color:#475569;text-decoration:none;font-size:0.9rem;font-weight:500;">Features</a>
+        <a href="#" style="background:#3B5FEF;color:#ffffff;text-decoration:none;
+                           font-size:0.88rem;font-weight:600;padding:8px 20px;
+                           border-radius:24px;">Get started</a>
       </div>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown('<div style="height:90px"></div>', unsafe_allow_html=True)
-    _, wcol, _ = st.columns([1, 3, 1])
-    with wcol:
+
+    # ── HERO: two columns ──
+    lcol, rcol = st.columns([11, 9], gap="large")
+
+    with lcol:
         st.markdown("""
-        <div class="ow-landing-hero">
-          <div class="ow-landing-h1">Stay curious.<br>Understand more.<br>
-            <span style="color:var(--blue)">Discover what matters.</span>
+        <div style="padding:56px 48px 32px 48px;">
+          <div style="display:inline-block;background:#EEF2FF;color:#3B5FEF;
+                      font-size:0.78rem;font-weight:600;padding:5px 14px;
+                      border-radius:20px;margin-bottom:22px;letter-spacing:0.5px;">
+            YOUR PERSONAL KNOWLEDGE FEED
           </div>
-          <div class="ow-landing-sub">Your personal knowledge feed, bringing together the ideas, research,
-            news and developments that matter to you, with room to discover what you haven\'t explored yet.</div>
+          <h1 style="font-size:2.7rem;font-weight:800;line-height:1.18;
+                     color:#172554;margin:0 0 20px 0;">
+            Stay curious.<br>Understand more.<br>
+            <span style="color:#3B5FEF;">Discover what matters.</span>
+          </h1>
+          <p style="font-size:1.05rem;color:#475569;line-height:1.7;
+                    max-width:480px;margin:0 0 36px 0;">
+            Your personal knowledge feed, bringing together the ideas, research,
+            news and developments that matter to you — with room to discover
+            what you haven't explored yet.
+          </p>
         </div>
         """, unsafe_allow_html=True)
-        _wbtn_l, _wbtn_m, _wbtn_r = st.columns([1, 2, 1])
-        with _wbtn_m:
+        _bl, _bm, _br = st.columns([2, 3, 3])
+        with _bm:
+            st.markdown("""
+            <style>
+            div[data-testid="stButton"] > button[kind="primary"] {
+                background-color: #3B5FEF !important;
+                border: none !important;
+                border-radius: 30px !important;
+                font-size: 1rem !important;
+                font-weight: 600 !important;
+                padding: 12px 28px !important;
+                color: #ffffff !important;
+            }
+            div[data-testid="stButton"] > button[kind="primary"]:hover {
+                background-color: #2d4fd6 !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             if st.button("Get started  →", type="primary", use_container_width=True, key="welcome_start"):
                 st.session_state.screen = "role_select"; st.rerun()
         st.markdown("""
-        <div class="ow-landing-features">
-          <div class="ow-landing-feat">📰 Personalised feed</div>
-          <div class="ow-landing-feat">📈 Emerging trends</div>
-          <div class="ow-landing-feat">🔗 Trusted sources</div>
-          <div class="ow-landing-feat">🌐 Broader perspective</div>
-        </div>
-        <div style="text-align:center;margin-top:12px">
-          <a href="?page=privacy" style="color:#94a3b8;font-size:0.78rem">Privacy</a>
-          &nbsp;·&nbsp;
-          <a href="?page=tos" style="color:#94a3b8;font-size:0.78rem">Terms</a>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;padding:24px 48px 0 48px;">
+          <div style="display:flex;align-items:center;gap:8px;color:#475569;font-size:0.88rem;">
+            <span>📰</span> Personalised feed
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;color:#475569;font-size:0.88rem;">
+            <span>📈</span> Emerging trends
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;color:#475569;font-size:0.88rem;">
+            <span>🔗</span> Trusted sources
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;color:#475569;font-size:0.88rem;">
+            <span>🌐</span> Broader perspective
+          </div>
         </div>
         """, unsafe_allow_html=True)
+
+    with rcol:
+        st.markdown(f"""
+        <div style="position:relative;min-height:480px;margin:32px 0;">
+          <!-- SVG dotted lines behind cards -->
+          <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;"
+               viewBox="0 0 420 480" preserveAspectRatio="none">
+            <defs><style>.dc{stroke:#3B5FEF;stroke-width:1.5;stroke-dasharray:5,5;fill:none;opacity:0.3;}</style></defs>
+            <line class="dc" x1="105" y1="68"  x2="210" y2="240"/>
+            <line class="dc" x1="315" y1="68"  x2="210" y2="240"/>
+            <line class="dc" x1="40"  y1="230" x2="210" y2="240"/>
+            <line class="dc" x1="380" y1="230" x2="210" y2="240"/>
+            <line class="dc" x1="105" y1="415" x2="210" y2="240"/>
+            <line class="dc" x1="315" y1="415" x2="210" y2="240"/>
+          </svg>
+
+          <!-- Centre owl circle -->
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-54%);
+                      width:110px;height:110px;background:#EEF2FF;border-radius:50%;
+                      display:flex;align-items:center;justify-content:center;
+                      box-shadow:0 8px 32px rgba(59,95,239,0.2);z-index:10;">
+            <img src="data:image/png;base64,{LOGO_B64}"
+                 style="width:68px;height:68px;border-radius:50%;object-fit:contain;">
+          </div>
+
+          <!-- Research – top-left -->
+          <div style="position:absolute;top:8%;left:5%;z-index:5;
+                      background:linear-gradient(135deg,#667eea,#764ba2);
+                      color:#fff;padding:9px 15px;border-radius:12px;
+                      font-size:0.82rem;font-weight:600;
+                      box-shadow:0 4px 16px rgba(102,126,234,0.4);">
+            🔬 Research
+          </div>
+          <!-- News – top-right -->
+          <div style="position:absolute;top:8%;right:5%;z-index:5;
+                      background:linear-gradient(135deg,#f093fb,#f5576c);
+                      color:#fff;padding:9px 15px;border-radius:12px;
+                      font-size:0.82rem;font-weight:600;
+                      box-shadow:0 4px 16px rgba(245,87,108,0.4);">
+            📰 News
+          </div>
+          <!-- Education – mid-left -->
+          <div style="position:absolute;top:44%;left:0%;z-index:5;
+                      background:linear-gradient(135deg,#4facfe,#00f2fe);
+                      color:#fff;padding:9px 15px;border-radius:12px;
+                      font-size:0.82rem;font-weight:600;
+                      box-shadow:0 4px 16px rgba(79,172,254,0.4);">
+            🎓 Education
+          </div>
+          <!-- Policy – mid-right -->
+          <div style="position:absolute;top:44%;right:0%;z-index:5;
+                      background:linear-gradient(135deg,#43e97b,#38f9d7);
+                      color:#fff;padding:9px 15px;border-radius:12px;
+                      font-size:0.82rem;font-weight:600;
+                      box-shadow:0 4px 16px rgba(67,233,123,0.4);">
+            🏛 Policy
+          </div>
+          <!-- Technology – bottom-left -->
+          <div style="position:absolute;bottom:8%;left:5%;z-index:5;
+                      background:linear-gradient(135deg,#fa709a,#fee140);
+                      color:#fff;padding:9px 15px;border-radius:12px;
+                      font-size:0.82rem;font-weight:600;
+                      box-shadow:0 4px 16px rgba(250,112,154,0.4);">
+            💻 Technology
+          </div>
+          <!-- Ideas – bottom-right -->
+          <div style="position:absolute;bottom:8%;right:5%;z-index:5;
+                      background:linear-gradient(135deg,#a18cd1,#fbc2eb);
+                      color:#fff;padding:9px 15px;border-radius:12px;
+                      font-size:0.82rem;font-weight:600;
+                      box-shadow:0 4px 16px rgba(161,140,209,0.4);">
+            💡 Ideas
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="text-align:center;padding:12px 0 20px;border-top:1px solid #f1f5f9;margin-top:4px;">
+      <a href="?page=privacy" style="color:#94a3b8;font-size:0.78rem;text-decoration:none;">Privacy</a>
+      &nbsp;·&nbsp;
+      <a href="?page=tos" style="color:#94a3b8;font-size:0.78rem;text-decoration:none;">Terms</a>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
+
 
 # ═══════════════════════════════════════════════════════════
 # SCREEN: ROLE SELECTION  (Step 1 of 4)
