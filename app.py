@@ -1368,6 +1368,91 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
   background: var(--hover-blue) !important;
   border-color: var(--hover-blue) !important;
 }
+
+/* ─────────────────────────────────────────────────────────
+   INTERESTS SCREEN — targeted bug fixes
+   ───────────────────────────────────────────────────────── */
+
+/* 1. Text input fields — white background, readable text.
+      Streamlit sets input bg via --background-color token;
+      override explicitly so it's never dark on this screen. */
+html:has(.ow-ob-h2) [data-testid="stTextInput"] > div > div,
+html:has(.ow-ob-h2) [data-testid="stTextInput"] > div {
+  background: #FFFFFF !important;
+}
+html:has(.ow-ob-h2) [data-testid="stTextInput"] input {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  color: #1F2937 !important;
+  caret-color: #1F2937 !important;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+}
+html:has(.ow-ob-h2) [data-testid="stTextInput"] input::placeholder {
+  color: #64748B !important;
+  opacity: 1 !important;
+}
+html:has(.ow-ob-h2) [data-testid="stTextInput"] input:focus {
+  border-color: #3B5FEF !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(59,95,239,0.12) !important;
+}
+
+/* 2. Subtopic expander — visible header text.
+      The emoji is a <span> inside <summary>; the text that follows
+      is in <p> or a sibling <span>. Target both selectors. */
+html:has(.ow-ob-h2) [data-testid="stExpander"] {
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 10px !important;
+  background: #FFFFFF !important;
+  margin-bottom: 4px !important;
+}
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary,
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary p,
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary > div > p,
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary span:not(svg *),
+html:has(.ow-ob-h2) .streamlit-expanderHeader,
+html:has(.ow-ob-h2) .streamlit-expanderHeader p {
+  color: #1F2937 !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+}
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary svg,
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary svg path {
+  fill: #64748B !important;
+  stroke: #64748B !important;
+}
+
+/* 3. Interest card labels — allow wrapping, prevent ellipsis clip.
+      Streamlit puts button label in a <p>/<span>/<div> inside <button>;
+      ensure none of them clips text. */
+html:has(.ow-ob-h2) .stButton button p,
+html:has(.ow-ob-h2) .stButton button span,
+html:has(.ow-ob-h2) .stButton button div {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
+html:has(.ow-ob-h2) .stButton button {
+  overflow: visible !important;
+}
+
+/* 4. Save / Set / Add buttons — prevent truncation.
+      These live in a narrow [5,1] column; min-width ensures label fits. */
+html:has(.ow-ob-h2) [data-testid="column"]:last-child .stButton button {
+  min-width: 72px !important;
+  white-space: nowrap !important;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+  font-size: 0.85rem !important;
+}
+
+/* 5. Spacing — prevent sections from collapsing into each other */
+html:has(.ow-ob-h2) .ow-subtopic-block { margin-top: 16px !important; }
+html:has(.ow-ob-h2) .ow-local-section { margin-top: 16px !important; }
+html:has(.ow-ob-h2) .ow-cant-find { margin-top: 16px !important; }
+html:has(.ow-ob-h2) .ow-selected-strip { margin-top: 12px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1618,7 +1703,7 @@ if st.session_state.screen == "interests":
             st.markdown('<div class="ow-local-section"><div class="ow-local-section-h">📍 Local News & Community</div></div>', unsafe_allow_html=True)
             already_set = bool(st.session_state.local_city)
             if already_set:
-                lce1, lce2 = st.columns([5, 1])
+                lce1, lce2 = st.columns([4, 1])
                 new_city = lce1.text_input("City", value=st.session_state.local_city,
                                            key="onboard_city_change", label_visibility="collapsed")
                 if lce2.button("Update", key="update_city_ob"):
@@ -1627,7 +1712,7 @@ if st.session_state.screen == "interests":
                     st.session_state.local_sources_city = ""
                     st.rerun()
             else:
-                lca1, lca2 = st.columns([5, 1])
+                lca1, lca2 = st.columns([4, 1])
                 entered_city = lca1.text_input("Your city or region", key="onboard_city_input",
                                                placeholder="e.g. Hyderabad, Pune, Bengaluru…",
                                                label_visibility="collapsed")
@@ -1639,7 +1724,7 @@ if st.session_state.screen == "interests":
 
         # ── Can't find your topic? — compact row ──
         st.markdown('<div class="ow-cant-find"><div class="ow-cant-find-h">Can\'t find your topic?</div><div class="ow-cant-find-sub">Type one or more topics separated by commas — we\'ll add them to your feed.</div></div>', unsafe_allow_html=True)
-        ci1, ci2 = st.columns([5, 1])
+        ci1, ci2 = st.columns([4, 1])
         custom_raw = ci1.text_input("Add topics", placeholder="e.g. Dentistry, News, Yoga…",
                                     key="custom_topic_input", label_visibility="collapsed")
         if ci2.button("Add  +", key="add_custom", type="primary"):
