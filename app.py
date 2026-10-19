@@ -1065,16 +1065,22 @@ st.markdown("""
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
 :root {
-  --navy: #1a1a6e;
-  --blue: #3b5bdb;
-  --violet: #7048e8;
-  --cyan: #0891b2;
-  --bg: #f7f9ff;
-  --card: #ffffff;
-  --border: #e8edf5;
-  --muted: #64748b;
-  --text: #1e293b;
-  --accent-bg: #eef2ff;
+  /* ── Owlume Design Tokens ── */
+  --navy:       #1a1a6e;          /* brand navy — headings, sidebar brand */
+  --blue:       #3B5FEF;          /* primary action blue */
+  --hover-blue: #2957D9;          /* button / link hover */
+  --violet:     #7048e8;          /* gradient accent */
+  --cyan:       #0891b2;
+  --bg:         #FAFBFD;          /* main page background */
+  --card:       #FFFFFF;          /* cards and reading surfaces */
+  --border:     #E2E8F0;          /* borders and dividers */
+  --muted:      #64748B;          /* secondary text */
+  --text:       #1F2937;          /* primary text / headings */
+  --accent-bg:  #E9F0FF;          /* subtle highlighted surfaces */
+  --success:    #16A34A;
+  --warning:    #F59E0B;
+  --error:      #EF4444;
+  --info:       #3B82F6;
 }
 
 body, .stApp { background: var(--bg) !important; }
@@ -1140,21 +1146,29 @@ body, .stApp { background: var(--bg) !important; }
 .ow-ob-dot.done, .ow-ob-dot.active { background: var(--blue); width: 32px; }
 .ow-ob-dot.future { background: var(--border); width: 20px; }
 
-/* Interest card buttons — scoped to onboarding via .ow-ob-h2 */
+/* ── Suppress Streamlit floating tooltip bubble on onboarding cards ── */
+html:has(.ow-ob-h2) [data-testid="stTooltipContent"],
+html:has(.ow-ob-h2) [role="tooltip"] { display: none !important; }
+/* Also hide the small tooltip icon that appears inside/beside the button */
+html:has(.ow-ob-h2) .stButton [class*="tooltipIcon"],
+html:has(.ow-ob-h2) .stButton [class*="TooltipIcon"] { display: none !important; }
+
+/* ── Interest / role card buttons — scoped to onboarding via .ow-ob-h2 ── */
 html:has(.ow-ob-h2) .stButton button[title] {
   min-height: 78px !important; height: auto !important;
   text-align: left !important; padding: 13px 14px !important;
   border-radius: 12px !important; display: flex !important;
   flex-direction: column !important; align-items: flex-start !important;
   font-size: 0.87rem !important; font-weight: 700 !important;
-  border: 1.5px solid #e2e8f0 !important; color: #1e293b !important;
-  background: white !important; box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
+  border: 1.5px solid var(--border) !important; color: var(--text) !important;
+  background: var(--card) !important; box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
   white-space: normal !important; word-break: break-word !important;
   line-height: 1.3 !important;
   transition: border-color 0.15s, box-shadow 0.15s !important;
 }
 html:has(.ow-ob-h2) .stButton button[title]:hover {
-  border-color: #3b5bdb !important; box-shadow: 0 2px 8px rgba(59,91,219,0.14) !important;
+  border-color: var(--blue) !important;
+  box-shadow: 0 2px 8px rgba(59,95,239,0.15) !important;
 }
 html:has(.ow-ob-h2) .stButton button[title]::after {
   content: attr(title) !important; font-size: 0.72rem !important;
@@ -1163,7 +1177,10 @@ html:has(.ow-ob-h2) .stButton button[title]::after {
 }
 html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title] {
   background: var(--blue) !important; border-color: var(--blue) !important;
-  color: white !important; box-shadow: 0 3px 12px rgba(59,91,219,0.28) !important;
+  color: white !important; box-shadow: 0 3px 12px rgba(59,95,239,0.30) !important;
+}
+html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]:hover {
+  background: var(--hover-blue) !important; border-color: var(--hover-blue) !important;
 }
 html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]::after {
   opacity: 0.78 !important;
@@ -1182,18 +1199,18 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]::after {
 /* Selected topics strip */
 .ow-selected-strip { margin: 10px 0 0; padding: 10px 12px;
   background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; }
-.ow-selected-strip-h { font-size: 0.7rem; font-weight: 700; color: #3b82f6;
+.ow-selected-strip-h { font-size: 0.7rem; font-weight: 700; color: var(--info);
   text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 7px; }
 .ow-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .ow-chip { display: inline-flex; align-items: center; gap: 5px;
-  background: white; border: 1.5px solid #93c5fd; color: #1d4ed8;
+  background: white; border: 1.5px solid #93c5fd; color: var(--hover-blue);
   border-radius: 999px; padding: 3px 10px 3px 10px;
   font-size: 0.78rem; font-weight: 600; line-height: 1.4; }
 
 /* Local section separator */
 .ow-local-section { margin: 10px 0 0; padding: 10px 14px;
   background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; }
-.ow-local-section-h { font-size: 0.7rem; font-weight: 700; color: #16a34a;
+.ow-local-section-h { font-size: 0.7rem; font-weight: 700; color: var(--success);
   text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
 
 /* Subtopic expanders — tighter spacing */
@@ -1266,7 +1283,7 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]::after {
   border: 1px solid var(--border); margin-bottom: 12px;
   transition: box-shadow 0.15s; cursor: pointer;
 }
-.ow-art-card:hover { box-shadow: 0 4px 16px rgba(59,91,219,0.1); }
+.ow-art-card:hover { box-shadow: 0 4px 16px rgba(59,95,239,0.10); }
 .ow-art-source { font-size: 0.78rem; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
 .ow-art-title { font-size: 0.98rem; font-weight: 600; color: var(--text); line-height: 1.4;
   margin-bottom: 6px; text-decoration: none; }
@@ -1306,12 +1323,12 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]::after {
 
 /* Buttons */
 .ow-btn-primary {
-  background: linear-gradient(135deg, var(--blue) 0%, var(--violet) 100%);
+  background: var(--blue);
   color: white; border: none; border-radius: 12px; padding: 14px 32px;
   font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%;
-  transition: opacity 0.15s; box-shadow: 0 4px 16px rgba(59,91,219,0.25);
+  transition: background 0.18s; box-shadow: 0 4px 16px rgba(59,95,239,0.25);
 }
-.ow-btn-primary:hover { opacity: 0.9; }
+.ow-btn-primary:hover { background: var(--hover-blue); }
 .ow-btn-secondary {
   background: transparent; color: var(--muted); border: none;
   font-size: 0.9rem; cursor: pointer; padding: 8px;
@@ -1325,6 +1342,39 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]::after {
   .ow-sidebar { display: none; }
   .ow-right { display: none; }
   .ow-feed { padding: 12px; }
+}
+
+/* ── Reading-optimised article typography ── */
+.ow-art-body {
+  font-size: 17px; line-height: 1.7; color: var(--text);
+  max-width: 720px; margin: 0 auto;
+}
+.ow-art-body h1, .ow-art-body h2, .ow-art-body h3 {
+  color: var(--navy); margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 700;
+}
+.ow-art-body p { margin-bottom: 1.1em; }
+.ow-art-body a { color: var(--blue); text-decoration: underline; }
+.ow-art-body a:hover { color: var(--hover-blue); }
+.ow-art-meta {
+  font-size: 0.8rem; color: var(--muted); margin-bottom: 16px;
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+}
+/* Article cards in the feed */
+.ow-art-title { font-size: 1rem; font-weight: 600; color: var(--text); line-height: 1.45; }
+.ow-art-summary { font-size: 0.88rem; color: var(--muted); line-height: 1.65; }
+
+/* ── Global Streamlit button refresh ── */
+/* Make Streamlit's primary buttons use the design-token blue */
+.stButton button[kind="primary"],
+.stButton [data-testid="stBaseButton-primary"] {
+  background: var(--blue) !important;
+  border-color: var(--blue) !important;
+  transition: background 0.18s !important;
+}
+.stButton button[kind="primary"]:hover,
+.stButton [data-testid="stBaseButton-primary"]:hover {
+  background: var(--hover-blue) !important;
+  border-color: var(--hover-blue) !important;
 }
 </style>
 """, unsafe_allow_html=True)
