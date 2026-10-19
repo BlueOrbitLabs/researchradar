@@ -1515,13 +1515,12 @@ if st.session_state.screen == "welcome":
           <!-- SVG dotted lines behind cards -->
           <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;"
                viewBox="0 0 420 480" preserveAspectRatio="none">
-            <defs><style>.dc{stroke:#3B5FEF;stroke-width:1.5;stroke-dasharray:5,5;fill:none;opacity:0.3;}</style></defs>
-            <line class="dc" x1="105" y1="68"  x2="210" y2="240"/>
-            <line class="dc" x1="315" y1="68"  x2="210" y2="240"/>
-            <line class="dc" x1="40"  y1="230" x2="210" y2="240"/>
-            <line class="dc" x1="380" y1="230" x2="210" y2="240"/>
-            <line class="dc" x1="105" y1="415" x2="210" y2="240"/>
-            <line class="dc" x1="315" y1="415" x2="210" y2="240"/>
+            <line stroke="#3B5FEF" stroke-width="1.5" stroke-dasharray="5,5" fill="none" opacity="0.3" x1="105" y1="68"  x2="210" y2="240"/>
+            <line stroke="#3B5FEF" stroke-width="1.5" stroke-dasharray="5,5" fill="none" opacity="0.3" x1="315" y1="68"  x2="210" y2="240"/>
+            <line stroke="#3B5FEF" stroke-width="1.5" stroke-dasharray="5,5" fill="none" opacity="0.3" x1="40"  y1="230" x2="210" y2="240"/>
+            <line stroke="#3B5FEF" stroke-width="1.5" stroke-dasharray="5,5" fill="none" opacity="0.3" x1="380" y1="230" x2="210" y2="240"/>
+            <line stroke="#3B5FEF" stroke-width="1.5" stroke-dasharray="5,5" fill="none" opacity="0.3" x1="105" y1="415" x2="210" y2="240"/>
+            <line stroke="#3B5FEF" stroke-width="1.5" stroke-dasharray="5,5" fill="none" opacity="0.3" x1="315" y1="415" x2="210" y2="240"/>
           </svg>
 
           <!-- Centre owl circle -->
