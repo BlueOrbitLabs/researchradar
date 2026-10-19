@@ -1146,44 +1146,36 @@ body, .stApp { background: var(--bg) !important; }
 .ow-ob-dot.done, .ow-ob-dot.active { background: var(--blue); width: 32px; }
 .ow-ob-dot.future { background: var(--border); width: 20px; }
 
-/* ── Suppress Streamlit floating tooltip bubble on onboarding cards ── */
-html:has(.ow-ob-h2) [data-testid="stTooltipContent"],
-html:has(.ow-ob-h2) [role="tooltip"] { display: none !important; }
-/* Also hide the small tooltip icon that appears inside/beside the button */
-html:has(.ow-ob-h2) .stButton [class*="tooltipIcon"],
-html:has(.ow-ob-h2) .stButton [class*="TooltipIcon"] { display: none !important; }
-
-/* ── Interest / role card buttons — scoped to onboarding via .ow-ob-h2 ── */
-html:has(.ow-ob-h2) .stButton button[title] {
-  min-height: 78px !important; height: auto !important;
-  text-align: left !important; padding: 13px 14px !important;
-  border-radius: 12px !important; display: flex !important;
-  flex-direction: column !important; align-items: flex-start !important;
-  font-size: 0.87rem !important; font-weight: 700 !important;
+/* ── Onboarding role / interest card buttons ──
+   NOTE: no help= on these buttons — no tooltip wrapper, no DOM surprises.
+   Description is rendered as a separate .ow-role-desc <p> below each button. */
+html:has(.ow-ob-h2) .stButton button {
+  min-height: 56px !important; height: auto !important;
+  text-align: left !important; padding: 12px 14px !important;
+  border-radius: 12px !important;
+  font-size: 0.9rem !important; font-weight: 700 !important;
   border: 1.5px solid var(--border) !important; color: var(--text) !important;
   background: var(--card) !important; box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
   white-space: normal !important; word-break: break-word !important;
-  line-height: 1.3 !important;
+  line-height: 1.35 !important;
   transition: border-color 0.15s, box-shadow 0.15s !important;
 }
-html:has(.ow-ob-h2) .stButton button[title]:hover {
+html:has(.ow-ob-h2) .stButton button:hover {
   border-color: var(--blue) !important;
   box-shadow: 0 2px 8px rgba(59,95,239,0.15) !important;
 }
-html:has(.ow-ob-h2) .stButton button[title]::after {
-  content: attr(title) !important; font-size: 0.72rem !important;
-  font-weight: 400 !important; opacity: 0.58 !important;
-  display: block !important; margin-top: 5px !important; line-height: 1.35 !important;
-}
-html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title] {
+html:has(.ow-ob-h2) [data-testid="stButton-primary"] button {
   background: var(--blue) !important; border-color: var(--blue) !important;
   color: white !important; box-shadow: 0 3px 12px rgba(59,95,239,0.30) !important;
 }
-html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]:hover {
+html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
   background: var(--hover-blue) !important; border-color: var(--hover-blue) !important;
 }
-html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]::after {
-  opacity: 0.78 !important;
+
+/* Description text rendered below each role/interest card */
+.ow-role-desc {
+  font-size: 0.72rem; color: var(--muted); margin: -4px 2px 8px 2px;
+  line-height: 1.35; padding: 0 2px;
 }
 
 /* Section label */
@@ -1506,10 +1498,14 @@ if st.session_state.screen == "role_select":
                 is_sel = cur_role == name
                 label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
                 if st.button(label, key=f"role_{i}", use_container_width=True,
-                             type="primary" if is_sel else "secondary",
-                             help=desc if desc else None):
+                             type="primary" if is_sel else "secondary"):
                     st.session_state.user_role = name if not is_sel else None
                     st.rerun()
+                if desc:
+                    st.markdown(
+                        f'<p class="ow-role-desc">{desc}</p>',
+                        unsafe_allow_html=True,
+                    )
 
         st.markdown("<br>", unsafe_allow_html=True)
         nav1, nav2, nav3 = st.columns([1, 2, 1])
@@ -1576,7 +1572,7 @@ if st.session_state.screen == "interests":
                         is_sel = name in sel
                         label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
                         if st.button(label, key=f"chip_{name}", use_container_width=True,
-                                     type="primary" if is_sel else "secondary", help=desc):
+                                     type="primary" if is_sel else "secondary"):
                             if is_sel: st.session_state.selected_topics.remove(name)
                             else: st.session_state.selected_topics.append(name)
                             st.rerun()
@@ -1765,7 +1761,7 @@ if st.session_state.screen == "discover_prefs":
                 is_sel = name in prefs
                 label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
                 if st.button(label, key=f"pref_{i}", use_container_width=True,
-                             type="primary" if is_sel else "secondary", help=desc):
+                             type="primary" if is_sel else "secondary"):
                     if is_sel: prefs.remove(name)
                     else: prefs.append(name)
                     st.session_state.discover_preferences = prefs
