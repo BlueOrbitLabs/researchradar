@@ -112,15 +112,61 @@ TOPIC_CATALOGUE = {
                       "Public Safety","Local Business","Health & Welfare","Infrastructure & Transport"],
         "description": "Stay informed about your city — local journalism, civic updates, community news and official announcements.",
     },
+    "Health & Medicine": {
+        "id": "health_medicine", "icon": "❤️", "color": "#e11d48",
+        "keywords": ["health","medicine","healthcare","public health","clinical","medical","hospital"],
+        "subtopics": ["Public health","Epidemiology","Health economics","Clinical research",
+                      "Mental health","Nutrition","Global health","Vaccines","Health policy",
+                      "Biotechnology","Health systems","Pharmaceuticals","Others"],
+        "description": "Research, healthcare systems, public health, clinical developments and more.",
+    },
+    "Business & Industry": {
+        "id": "business", "icon": "🏢", "color": "#0369a1",
+        "keywords": ["business","industry","corporate","enterprise","manufacturing","commerce","retail"],
+        "subtopics": ["Corporate Strategy","Manufacturing","Retail & Commerce","Supply Chain",
+                      "Business Innovation","Sustainability in Business"],
+        "description": "Corporate strategy, industry developments and market trends.",
+    },
+    "World Affairs": {
+        "id": "world_affairs", "icon": "🌐", "color": "#7c3aed",
+        "keywords": ["world","international","geopolitics","diplomacy","global affairs","foreign policy"],
+        "subtopics": ["Geopolitics","International Relations","Diplomacy","Global Economy",
+                      "Conflict & Peace","United Nations"],
+        "description": "International relations, geopolitics and global developments.",
+    },
 }
 
-# Featured topics shown first on interest screen (11 + More)
+# Featured topics shown first on interest screen — 12 cards matching reference UI
 FEATURED_TOPICS = [
-    "AI & Technology","Public Health","Health Economics","Global Health",
-    "Startups & Innovation","Science & Research","Policy & Government",
-    "Climate & Environment","Finance & Markets","Productivity","Careers",
+    "Health & Medicine","Science & Research","AI & Technology",
+    "Finance & Markets","Policy & Government","Climate & Environment",
+    "Business & Industry","Education","Social Sciences",
+    "Arts & Culture","World Affairs","Careers",
     "Local News & Community",
 ]
+
+# Short descriptions shown on interest cards
+TOPIC_DESCRIPTIONS = {
+    "AI & Technology":       "Machine learning, robotics, data science and the digital world",
+    "Public Health":         "Epidemiology, global health, health policy and disease prevention",
+    "Health Economics":      "Health financing, drug pricing, insurance and health systems",
+    "Climate & Environment": "Climate science, policy, ecology and sustainability",
+    "Science & Research":    "Biology, chemistry, physics, genetics and emerging sciences",
+    "Policy & Government":   "Public policy, governance, law and regulation",
+    "Finance & Markets":     "Economics, markets, investment, trade and fintech",
+    "Global Health":         "WHO, UNICEF, health equity and international development",
+    "Startups & Innovation": "Entrepreneurship, venture capital and product innovation",
+    "Productivity":          "Learning, habits, focus and professional growth",
+    "Careers":               "Jobs, skills, professional development and career strategy",
+    "Social Sciences":       "Sociology, psychology, culture and behaviour",
+    "Education":             "Higher education, learning science and education policy",
+    "Space & Cosmos":        "Astronomy, astrophysics and space exploration",
+    "Arts & Culture":        "Art, music, literature, film and cultural heritage",
+    "Local News & Community":"Local journalism, civic updates and community news",
+    "Health & Medicine":     "Research, healthcare systems, clinical developments and more",
+    "Business & Industry":   "Corporate strategy, industry news and market trends",
+    "World Affairs":         "International relations, geopolitics and global developments",
+}
 
 # All topic names (for fuzzy matching)
 ALL_TOPIC_NAMES = list(TOPIC_CATALOGUE.keys())
@@ -971,7 +1017,9 @@ def max_topics():
 # SESSION STATE
 # ═══════════════════════════════════════════════════════════
 DEFAULTS = {
-    "screen": "welcome",          # welcome | interests | subtopics | feed
+    "screen": "welcome",          # welcome | role_select | interests | discover_prefs | local_setup | review | subtopics | feed
+    "user_role": None,            # e.g. "Student", "PhD scholar / Researcher", etc.
+    "discover_preferences": [],   # e.g. ["New research & journal publications", ...]
     "selected_topics": [],
     "custom_topics": [],
     "subtopics": {},
@@ -1056,29 +1104,115 @@ body, .stApp { background: var(--bg) !important; }
   font-size: 16px; flex-shrink: 0; }
 .ow-feature-text { font-size: 0.9rem; font-weight: 500; color: var(--text); }
 
-/* ── Interest Selection ── */
-.ow-ob-wrap {
-  min-height: 100vh; background: var(--bg); padding: 40px 20px;
+/* ── Landing page ── */
+.ow-landing-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(255,255,255,0.96); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 40px;
 }
-.ow-ob-inner { max-width: 720px; margin: 0 auto; }
-.ow-ob-h2 { font-size: 1.6rem; font-weight: 800; color: var(--navy); margin: 0 0 4px; }
-.ow-ob-sub { color: var(--muted); font-size: 0.95rem; margin: 0 0 24px; }
+.ow-landing-brand { display: flex; align-items: center; gap: 8px; }
+.ow-landing-brand-name { font-size: 1.2rem; font-weight: 800; color: var(--navy); }
+.ow-landing-links { display: flex; gap: 24px; }
+.ow-landing-link { color: var(--muted); text-decoration: none; font-size: 0.88rem; font-weight: 500; }
+.ow-landing-link:hover { color: var(--blue); }
+.ow-landing-hero { text-align: center; padding: 0 20px 28px; }
+.ow-landing-h1 { font-size: 2.4rem; font-weight: 900; color: var(--navy);
+  line-height: 1.15; margin-bottom: 16px; }
+.ow-landing-sub { font-size: 1rem; color: var(--muted); line-height: 1.6;
+  max-width: 540px; margin: 0 auto 28px; }
+.ow-landing-features {
+  display: flex; justify-content: center; gap: 28px; flex-wrap: wrap;
+  margin-top: 18px; padding: 16px 0; border-top: 1px solid var(--border);
+}
+.ow-landing-feat { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
 
-/* Topic chips */
-.ow-chip-grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
-.ow-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 16px; border-radius: 100px;
-  border: 2px solid var(--border); background: white;
-  font-size: 0.9rem; font-weight: 500; color: var(--text);
-  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+/* ── Onboarding layout ── */
+.ow-ob-h2 { font-size: 1.55rem; font-weight: 800; color: var(--navy); margin: 0 0 6px; }
+.ow-ob-sub { color: var(--muted); font-size: 0.95rem; margin: 0 0 20px; line-height: 1.5; }
+.ow-ob-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px;
 }
-.ow-chip:hover { border-color: var(--blue); color: var(--blue); background: var(--accent-bg); }
-.ow-chip.selected {
-  border-color: var(--blue); background: var(--blue);
-  color: white; box-shadow: 0 2px 8px rgba(59,91,219,0.25);
+.ow-ob-step { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+.ow-ob-dots { display: flex; align-items: center; gap: 5px; }
+.ow-ob-dot { height: 4px; border-radius: 2px; }
+.ow-ob-dot.done, .ow-ob-dot.active { background: var(--blue); width: 32px; }
+.ow-ob-dot.future { background: var(--border); width: 20px; }
+
+/* Interest card buttons — scoped to onboarding via .ow-ob-h2 */
+html:has(.ow-ob-h2) .stButton button[title] {
+  min-height: 78px !important; height: auto !important;
+  text-align: left !important; padding: 13px 14px !important;
+  border-radius: 12px !important; display: flex !important;
+  flex-direction: column !important; align-items: flex-start !important;
+  font-size: 0.87rem !important; font-weight: 700 !important;
+  border: 1.5px solid #e2e8f0 !important; color: #1e293b !important;
+  background: white !important; box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
+  white-space: normal !important; word-break: break-word !important;
+  line-height: 1.3 !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
 }
-.ow-chip.selected:hover { background: var(--navy); border-color: var(--navy); }
+html:has(.ow-ob-h2) .stButton button[title]:hover {
+  border-color: #3b5bdb !important; box-shadow: 0 2px 8px rgba(59,91,219,0.14) !important;
+}
+html:has(.ow-ob-h2) .stButton button[title]::after {
+  content: attr(title) !important; font-size: 0.72rem !important;
+  font-weight: 400 !important; opacity: 0.58 !important;
+  display: block !important; margin-top: 5px !important; line-height: 1.35 !important;
+}
+html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title] {
+  background: var(--blue) !important; border-color: var(--blue) !important;
+  color: white !important; box-shadow: 0 3px 12px rgba(59,91,219,0.28) !important;
+}
+html:has(.ow-ob-h2) [data-testid="stButton-primary"] button[title]::after {
+  opacity: 0.78 !important;
+}
+
+/* Section label */
+.ow-section-label { font-size: 0.72rem; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 8px; }
+
+/* Can't find topic — compact horizontal row */
+.ow-cant-find { margin: 14px 0 0; padding: 12px 14px; background: #f8fafc;
+  border: 1px solid var(--border); border-radius: 10px; }
+.ow-cant-find-h { font-weight: 700; color: var(--navy); font-size: 0.88rem; margin-bottom: 2px; }
+.ow-cant-find-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 8px; }
+
+/* Selected topics strip */
+.ow-selected-strip { margin: 10px 0 0; padding: 10px 12px;
+  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; }
+.ow-selected-strip-h { font-size: 0.7rem; font-weight: 700; color: #3b82f6;
+  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 7px; }
+.ow-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.ow-chip { display: inline-flex; align-items: center; gap: 5px;
+  background: white; border: 1.5px solid #93c5fd; color: #1d4ed8;
+  border-radius: 999px; padding: 3px 10px 3px 10px;
+  font-size: 0.78rem; font-weight: 600; line-height: 1.4; }
+
+/* Local section separator */
+.ow-local-section { margin: 10px 0 0; padding: 10px 14px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; }
+.ow-local-section-h { font-size: 0.7rem; font-weight: 700; color: #16a34a;
+  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+
+/* Subtopic expanders — tighter spacing */
+.ow-subtopic-block { margin: 6px 0 0; }
+
+.ow-note { font-size: 0.78rem; color: var(--muted); margin-top: 8px; text-align: center; }
+
+/* Review screen */
+.ow-review-row {
+  display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px;
+  background: white; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 10px;
+}
+.ow-review-icon { font-size: 1.15rem; flex-shrink: 0; padding-top: 2px; }
+.ow-review-label { font-size: 0.73rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px; }
+.ow-review-value { font-size: 0.88rem; color: var(--text); line-height: 1.5; }
+
+/* Local setup */
+.ow-local-icon { font-size: 2.2rem; margin-bottom: 8px; }
 
 /* ── Main App ── */
 .ow-app { display: flex; height: 100vh; overflow: hidden; }
@@ -1124,6 +1258,7 @@ body, .stApp { background: var(--bg) !important; }
 .ow-briefing-date { font-size: 0.8rem; opacity: 0.7; margin-bottom: 4px; }
 .ow-briefing-h { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
 .ow-briefing-sub { font-size: 0.85rem; opacity: 0.8; }
+.ow-briefing-item { font-size: 0.83rem; margin: 5px 0; line-height: 1.4; padding-left: 2px; }
 
 /* Article card */
 .ow-art-card {
@@ -1185,12 +1320,6 @@ body, .stApp { background: var(--bg) !important; }
   font-size: 0.85rem; color: var(--blue); font-weight: 600; margin-bottom: 8px;
 }
 
-/* Progress dots */
-.ow-progress { display: flex; gap: 6px; justify-content: center; margin-bottom: 24px; }
-.ow-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
-.ow-dot.active { background: var(--blue); width: 24px; border-radius: 4px; }
-.ow-dot.done { background: var(--blue); }
-
 /* Responsive */
 @media (max-width: 768px) {
   .ow-sidebar { display: none; }
@@ -1245,34 +1374,104 @@ By using Owlume you agree to use it for personal research only. Content is aggre
 # SCREEN: WELCOME
 # ═══════════════════════════════════════════════════════════
 if st.session_state.screen == "welcome":
-    # Fixed gradient background (doesn't push content down)
     st.markdown('<div class="ow-welcome-bg"></div>', unsafe_allow_html=True)
-    st.markdown('<div style="height:6vh"></div>', unsafe_allow_html=True)
-    _, wcol, _ = st.columns([1, 2, 1])
+    st.markdown("""
+    <div class="ow-landing-nav">
+      <div class="ow-landing-brand">
+        <span style="font-size:1.5rem">🦉</span>
+        <span class="ow-landing-brand-name">Owlume</span>
+      </div>
+      <div class="ow-landing-links">
+        <a href="#" class="ow-landing-link">About</a>
+        <a href="#" class="ow-landing-link">How it works</a>
+        <a href="#" class="ow-landing-link">Features</a>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div style="height:90px"></div>', unsafe_allow_html=True)
+    _, wcol, _ = st.columns([1, 3, 1])
     with wcol:
-        st.markdown(f"""
-        <div class="ow-welcome-card">
-          <img src="data:image/png;base64,{LOGO_B64}" class="ow-welcome-logo">
-          <div class="ow-welcome-h1">Welcome to Owlume</div>
-          <div class="ow-welcome-tag">Follow what matters. Get clear explanations. Stay ahead.</div>
-          <div class="ow-feature">
-            <div class="ow-feature-icon">📡</div>
-            <div class="ow-feature-text">Personalised updates from trusted sources</div>
+        st.markdown("""
+        <div class="ow-landing-hero">
+          <div class="ow-landing-h1">Stay curious.<br>Understand more.<br>
+            <span style="color:var(--blue)">Discover what matters.</span>
           </div>
-          <div class="ow-feature">
-            <div class="ow-feature-icon">🤖</div>
-            <div class="ow-feature-text">AI explanations, summaries and key takeaways</div>
-          </div>
-          <div class="ow-feature" style="border-bottom:none">
-            <div class="ow-feature-icon">🔎</div>
-            <div class="ow-feature-text">Deeper understanding with Ask Owlume</div>
-          </div>
+          <div class="ow-landing-sub">Your personal knowledge feed, bringing together the ideas, research,
+            news and developments that matter to you, with room to discover what you haven\'t explored yet.</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Get started →", type="primary", use_container_width=True):
-            st.session_state.screen = "interests"
-            st.rerun()
-        st.markdown('<div style="text-align:center;margin-top:10px"><a href="?page=privacy" style="color:#64748b;font-size:0.8rem">Privacy</a> · <a href="?page=tos" style="color:#64748b;font-size:0.8rem">Terms</a></div>', unsafe_allow_html=True)
+        if st.button("Get started  →", type="primary", use_container_width=True, key="welcome_start"):
+            st.session_state.screen = "role_select"; st.rerun()
+        st.markdown("""
+        <div class="ow-landing-features">
+          <div class="ow-landing-feat">📰 Personalised feed</div>
+          <div class="ow-landing-feat">📈 Emerging trends</div>
+          <div class="ow-landing-feat">🔗 Trusted sources</div>
+          <div class="ow-landing-feat">🌐 Broader perspective</div>
+        </div>
+        <div style="text-align:center;margin-top:12px">
+          <a href="?page=privacy" style="color:#94a3b8;font-size:0.78rem">Privacy</a>
+          &nbsp;·&nbsp;
+          <a href="?page=tos" style="color:#94a3b8;font-size:0.78rem">Terms</a>
+        </div>
+        """, unsafe_allow_html=True)
+    st.stop()
+
+# ═══════════════════════════════════════════════════════════
+# SCREEN: ROLE SELECTION  (Step 1 of 4)
+# ═══════════════════════════════════════════════════════════
+if st.session_state.screen == "role_select":
+    _, ob_col, _ = st.columns([1, 3, 1])
+    with ob_col:
+        st.markdown('''<div class="ow-ob-header">
+          <div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="ow-ob-step">Step 1 of 4</span>
+            <div class="ow-ob-dots">
+              <div class="ow-ob-dot active"></div>
+              <div class="ow-ob-dot future"></div>
+              <div class="ow-ob-dot future"></div>
+              <div class="ow-ob-dot future"></div>
+            </div>
+          </div>
+        </div>''', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-h2">What best describes you?</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-sub">This helps us suggest useful content, but you can explore anything and change this later.</div>', unsafe_allow_html=True)
+
+        ROLES = [
+            ("🎓", "Student",                     "College or university"),
+            ("📋", "Competitive exam aspirant",    "UPSC, UGC NET, NEET, GATE, banking, etc."),
+            ("🏛️", "Faculty / Educator",            "Teaching and academia"),
+            ("🔬", "PhD scholar / Researcher",      "Academic research"),
+            ("💼", "Working professional",          "Industry, government or other roles"),
+            ("💡", "Curious learner",               "I explore many fields"),
+            ("❓", "Other",                         "Tell us more"),
+            ("🤫", "Prefer not to say",             ""),
+        ]
+        cur_role = st.session_state.user_role
+        c1, c2 = st.columns(2)
+        for i, (ico, name, desc) in enumerate(ROLES):
+            col = c1 if i % 2 == 0 else c2
+            with col:
+                is_sel = cur_role == name
+                label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
+                if st.button(label, key=f"role_{i}", use_container_width=True,
+                             type="primary" if is_sel else "secondary",
+                             help=desc if desc else None):
+                    st.session_state.user_role = name if not is_sel else None
+                    st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        nav1, nav2, nav3 = st.columns([1, 2, 1])
+        with nav1:
+            if st.button("← Back", key="role_back"):
+                st.session_state.screen = "welcome"; st.rerun()
+        with nav2:
+            if st.button("Continue →", type="primary", use_container_width=True, key="role_next"):
+                st.session_state.screen = "interests"; st.rerun()
+        with nav3:
+            if st.button("Skip", key="role_skip"):
+                st.session_state.screen = "interests"; st.rerun()
     st.stop()
 
 # ═══════════════════════════════════════════════════════════
@@ -1281,35 +1480,40 @@ if st.session_state.screen == "welcome":
 if st.session_state.screen == "interests":
     _, ob_col, _ = st.columns([1, 3, 1])
     with ob_col:
-        # Progress
-        st.markdown('''<div class="ow-progress">
-          <div class="ow-dot done"></div>
-          <div class="ow-dot active"></div>
-          <div class="ow-dot"></div>
-          <div class="ow-dot"></div>
+        st.markdown('''<div class="ow-ob-header">
+          <div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="ow-ob-step">Step 2 of 4</span>
+            <div class="ow-ob-dots">
+              <div class="ow-ob-dot done"></div>
+              <div class="ow-ob-dot active"></div>
+              <div class="ow-ob-dot future"></div>
+              <div class="ow-ob-dot future"></div>
+            </div>
+          </div>
         </div>''', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-h2">What are you curious about?</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-sub">Choose your interests. Mix familiar subjects with topics you\'ve always wanted to explore.</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="ow-ob-h2">What interests you?</div>', unsafe_allow_html=True)
-        st.markdown('<div class="ow-ob-sub">Select a few topics to get your personalised feed.</div>', unsafe_allow_html=True)
-
-        # Topic search
-        topic_q = st.text_input("Search topics", placeholder="Search topics (e.g. AI, public health, startups...)",
+        # Global search
+        topic_q = st.text_input("Search topics",
+                                placeholder="🔍  Search any field or topic (e.g. public health, AI, history, climate...)",
                                 key="topic_search_input", label_visibility="collapsed")
 
-        # Determine which topics to show
+        # Determine visible topics
         if topic_q.strip():
             visible = search_topics(topic_q)
+            st.markdown('<div class="ow-section-label">Search results</div>', unsafe_allow_html=True)
         elif st.session_state.show_all_topics:
-            visible = ALL_TOPIC_NAMES
+            visible = list(TOPIC_CATALOGUE.keys())
+            st.markdown('<div class="ow-section-label">All interests</div>', unsafe_allow_html=True)
         else:
             visible = FEATURED_TOPICS
+            st.markdown('<div class="ow-section-label">Popular interests</div>', unsafe_allow_html=True)
 
         sel = st.session_state.selected_topics
-        n = len(sel)
-        if n > 0:
-            st.markdown(f'<div class="ow-selection-count">✓ {n} topic{"s" if n!=1 else ""} selected</div>', unsafe_allow_html=True)
 
-        # Chip buttons — 3 per row
+        # Card grid — 3 per row; help= puts description in title attr → CSS ::after renders it
         if visible:
             cols_per_row = 3
             rows = [visible[i:i+cols_per_row] for i in range(0, len(visible), cols_per_row)]
@@ -1318,106 +1522,324 @@ if st.session_state.screen == "interests":
                 for ci, name in enumerate(row):
                     with cols[ci]:
                         ico = topic_icon(name)
+                        desc = TOPIC_DESCRIPTIONS.get(name, "")
                         is_sel = name in sel
-                        label = f"✓ {ico} {name}" if is_sel else f"{ico} {name}"
-                        btn_type = "primary" if is_sel else "secondary"
-                        if st.button(label, key=f"chip_{name}", use_container_width=True, type=btn_type):
-                            if is_sel:
-                                st.session_state.selected_topics.remove(name)
-                            else:
-                                st.session_state.selected_topics.append(name)
+                        label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
+                        if st.button(label, key=f"chip_{name}", use_container_width=True,
+                                     type="primary" if is_sel else "secondary", help=desc):
+                            if is_sel: st.session_state.selected_topics.remove(name)
+                            else: st.session_state.selected_topics.append(name)
                             st.rerun()
-
-        # ── Local News location prompt (shown inline when topic is selected) ──
-        if "Local News & Community" in st.session_state.selected_topics:
-            already_set = bool(st.session_state.local_city)
-            with st.container():
-                st.markdown(
-                    '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;'
-                    'padding:12px 14px;margin:8px 0 4px">'
-                    '<div style="font-weight:700;color:#c2410c;margin-bottom:6px">📍 Set your location</div>'
-                    '<div style="font-size:0.85rem;color:#78350f;margin-bottom:8px">'
-                    'Tell Owlume your city so it can find local news. You can skip and set it later.</div>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-                if already_set:
-                    st.success(f"📍 Location set: **{st.session_state.local_city}**")
-                    lce1, lce2 = st.columns([4, 1])
-                    new_city = lce1.text_input("Change city", value=st.session_state.local_city,
-                                               key="onboard_city_change", label_visibility="collapsed")
-                    if lce2.button("Update", key="update_city_ob"):
-                        st.session_state.local_city = new_city.strip()
-                        st.session_state.local_source_catalogue = {}
-                        st.session_state.local_sources_city = ""
-                        st.rerun()
-                else:
-                    lca1, lca2, lca3 = st.columns([3, 1, 1])
-                    entered_city = lca1.text_input(
-                        "Your city", key="onboard_city_input",
-                        placeholder="e.g. Hyderabad, Pune, Warangal…",
-                        label_visibility="collapsed",
-                    )
-                    if lca2.button("Set →", key="set_city_ob", type="primary"):
-                        if entered_city.strip():
-                            st.session_state.local_city = entered_city.strip()
-                            st.session_state.local_source_catalogue = {}
-                            st.rerun()
-                    if lca3.button("Skip", key="skip_city_ob"):
-                        pass  # user can configure later from sidebar
 
         # Show More / Show Less
         if not topic_q.strip():
             if not st.session_state.show_all_topics:
-                if st.button("More topics →", key="show_more"):
+                if st.button("More topics  ↓", key="show_more", use_container_width=True):
                     st.session_state.show_all_topics = True; st.rerun()
             else:
-                if st.button("← Show less", key="show_less"):
+                if st.button("Show less  ↑", key="show_less", use_container_width=True):
                     st.session_state.show_all_topics = False; st.rerun()
 
-        # Custom topic
-        st.markdown("---")
-        ci1, ci2 = st.columns([4, 1])
-        custom = ci1.text_input("Add a custom topic", placeholder="Type a topic not listed above...",
-                               key="custom_topic_input", label_visibility="collapsed")
-        if ci2.button("Add", key="add_custom"):
-            ct = custom.strip()
-            if ct:
-                matched = fuzzy_match_topic(ct)
-                if matched and matched not in st.session_state.selected_topics:
-                    st.session_state.selected_topics.append(matched)
-                    st.success(f"Added \"{matched}\"")
-                elif ct not in st.session_state.custom_topics and ct not in st.session_state.selected_topics:
-                    st.session_state.custom_topics.append(ct)
-                    st.success(f"Added \"{ct}\"")
+        # ── Subtopic expanders — only for selected catalogue topics (not local, not custom) ──
+        subject_sel = [t for t in sel if t != "Local News & Community"]
+        if subject_sel:
+            st.markdown('<div class="ow-subtopic-block">', unsafe_allow_html=True)
+            for _stn in subject_sel:
+                _csubs = TOPIC_CATALOGUE.get(_stn, {}).get("subtopics", [])
+                if not _csubs:
+                    continue
+                _cursubs = st.session_state.subtopics.get(_stn, [])
+                _nsel = len(_cursubs)
+                _lbl = (f"{topic_icon(_stn)} {_stn}  ·  {_nsel} subtopic{'s' if _nsel!=1 else ''} chosen"
+                        if _nsel else f"{topic_icon(_stn)} {_stn}  ·  Narrow by subtopic (optional)")
+                with st.expander(_lbl, expanded=False):
+                    _scols = st.columns(3)
+                    for _si, _sub in enumerate(_csubs):
+                        with _scols[_si % 3]:
+                            _ssel = _sub in _cursubs
+                            if st.button(f"✓ {_sub}" if _ssel else _sub,
+                                         key=f"sub_inline_{_stn}_{_si}",
+                                         type="primary" if _ssel else "secondary",
+                                         use_container_width=True):
+                                if _ssel: _cursubs.remove(_sub)
+                                else: _cursubs.append(_sub)
+                                st.session_state.subtopics[_stn] = _cursubs
+                                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Local News — separate visual section ──
+        if "Local News & Community" in sel:
+            st.markdown('<div class="ow-local-section"><div class="ow-local-section-h">📍 Local News & Community</div></div>', unsafe_allow_html=True)
+            already_set = bool(st.session_state.local_city)
+            if already_set:
+                lce1, lce2 = st.columns([5, 1])
+                new_city = lce1.text_input("City", value=st.session_state.local_city,
+                                           key="onboard_city_change", label_visibility="collapsed")
+                if lce2.button("Update", key="update_city_ob"):
+                    st.session_state.local_city = new_city.strip()
+                    st.session_state.local_source_catalogue = {}
+                    st.session_state.local_sources_city = ""
+                    st.rerun()
+            else:
+                lca1, lca2 = st.columns([5, 1])
+                entered_city = lca1.text_input("Your city or region", key="onboard_city_input",
+                                               placeholder="e.g. Hyderabad, Pune, Bengaluru…",
+                                               label_visibility="collapsed")
+                if lca2.button("Set →", key="set_city_ob", type="primary"):
+                    if entered_city.strip():
+                        st.session_state.local_city = entered_city.strip()
+                        st.session_state.local_source_catalogue = {}
+                        st.rerun()
+
+        # ── Can't find your topic? — compact row ──
+        st.markdown('<div class="ow-cant-find"><div class="ow-cant-find-h">Can\'t find your topic?</div><div class="ow-cant-find-sub">Type one or more topics separated by commas — we\'ll add them to your feed.</div></div>', unsafe_allow_html=True)
+        ci1, ci2 = st.columns([5, 1])
+        custom_raw = ci1.text_input("Add topics", placeholder="e.g. Dentistry, News, Yoga…",
+                                    key="custom_topic_input", label_visibility="collapsed")
+        if ci2.button("Add  +", key="add_custom", type="primary"):
+            # Split on commas, strip, dedupe case-insensitively
+            parts = [p.strip() for p in custom_raw.split(",") if p.strip()]
+            existing_lower = {t.lower() for t in st.session_state.selected_topics + st.session_state.custom_topics}
+            added, skipped = [], []
+            for part in parts:
+                if not part:
+                    continue
+                if part.lower() in existing_lower:
+                    skipped.append(part)
+                    continue
+                matched = fuzzy_match_topic(part)
+                if matched:
+                    if matched.lower() not in existing_lower:
+                        st.session_state.selected_topics.append(matched)
+                        existing_lower.add(matched.lower())
+                        added.append(matched)
+                    else:
+                        skipped.append(part)
                 else:
-                    st.info("Already selected!")
+                    st.session_state.custom_topics.append(part)
+                    existing_lower.add(part.lower())
+                    added.append(part)
+            if added:
+                st.success(f"Added: {', '.join(added)}")
+            if skipped:
+                st.info(f"Already selected: {', '.join(skipped)}")
+            if added or skipped:
                 st.rerun()
 
-        # Custom topics shown as chips
-        if st.session_state.custom_topics:
-            st.markdown("**Your custom topics:**")
-            cc = st.columns(min(3, len(st.session_state.custom_topics)))
-            for i, ct in enumerate(st.session_state.custom_topics):
-                with cc[i % 3]:
-                    if st.button(f"✕ {ct}", key=f"rm_custom_{i}"):
-                        st.session_state.custom_topics.remove(ct); st.rerun()
+        # ── Selected interests strip ──
+        all_sel = list(dict.fromkeys(st.session_state.selected_topics + st.session_state.custom_topics))
+        # Deduplicate display (case-insensitive, keeping first occurrence)
+        seen_lower = set()
+        deduped = []
+        for t in all_sel:
+            if t.lower() not in seen_lower:
+                deduped.append(t)
+                seen_lower.add(t.lower())
+        if deduped:
+            chips_html = "".join(
+                f'<span class="ow-chip">{topic_icon(t) + "  " if t in TOPIC_CATALOGUE else ""}{t}</span>'
+                for t in deduped
+            )
+            st.markdown(
+                f'<div class="ow-selected-strip">'
+                f'<div class="ow-selected-strip-h">✓ {len(deduped)} interest{"s" if len(deduped)!=1 else ""} selected</div>'
+                f'<div class="ow-chip-row">{chips_html}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            # Removable buttons for custom topics only
+            if st.session_state.custom_topics:
+                rm_cols = st.columns(min(4, len(st.session_state.custom_topics)))
+                for i, ct in enumerate(list(st.session_state.custom_topics)):
+                    with rm_cols[i % 4]:
+                        if st.button(f"✕ {ct}", key=f"rm_custom_{i}", use_container_width=True):
+                            st.session_state.custom_topics.remove(ct)
+                            st.rerun()
 
-        # Bottom nav
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="ow-note">ℹ️ You can change your interests anytime from your profile.</div>', unsafe_allow_html=True)
+
+        # Footer nav
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
         nav1, nav2, nav3 = st.columns([1, 2, 1])
         with nav1:
             if st.button("← Back", key="ob_back"):
-                st.session_state.screen = "welcome"; st.rerun()
+                st.session_state.screen = "role_select"; st.rerun()
         with nav2:
             has_topics = len(all_topics_for_user()) > 0
-            if st.button("Next →", type="primary", use_container_width=True, key="ob_next",
+            if st.button("Continue →", type="primary", use_container_width=True, key="ob_next",
                          disabled=not has_topics):
-                if st.session_state.selected_topics:
-                    st.session_state.active_topic = st.session_state.selected_topics[0]
-                st.session_state.screen = "subtopics"; st.rerun()
+                st.session_state.screen = "discover_prefs"; st.rerun()
         with nav3:
             if st.button("Skip for now", key="ob_skip"):
+                st.session_state.screen = "discover_prefs"; st.rerun()
+    st.stop()
+
+# ═══════════════════════════════════════════════════════════
+# SCREEN: DISCOVER PREFERENCES (Step 3 of 4)
+# ═══════════════════════════════════════════════════════════
+if st.session_state.screen == "discover_prefs":
+    _, ob_col, _ = st.columns([1, 3, 1])
+    with ob_col:
+        st.markdown('''<div class="ow-ob-header">
+          <div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="ow-ob-step">Step 3 of 4</span>
+            <div class="ow-ob-dots">
+              <div class="ow-ob-dot done"></div>
+              <div class="ow-ob-dot done"></div>
+              <div class="ow-ob-dot active"></div>
+              <div class="ow-ob-dot future"></div>
+            </div>
+          </div>
+        </div>''', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-h2">What would you like to discover?</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-sub">Choose the kinds of updates you want. Select as many as you like.</div>', unsafe_allow_html=True)
+
+        PREF_OPTIONS = [
+            ("📄", "New research & journal publications",       "Academic papers and scientific findings"),
+            ("📈", "Emerging trends & breakthroughs",           "Cutting-edge developments and innovations"),
+            ("🌍", "Current affairs & world events",            "International news and geopolitics"),
+            ("🏛️", "Government policies & official reports",    "Policy documents and official announcements"),
+            ("🏭", "Industry & professional developments",      "Sector news and professional insights"),
+            ("🏆", "Grants, fellowships & opportunities",       "Funding, scholarships and career opportunities"),
+            ("📚", "Exam-relevant current affairs",             "News relevant to competitive exams"),
+            ("💡", "Practical explainers & background knowledge","In-depth explainers and how-things-work"),
+            ("🔍", "General knowledge beyond my usual interests","Broaden perspective with diverse topics"),
+            ("📍", "Local news & community updates",            "Reporting from your city and region"),
+        ]
+        prefs = st.session_state.discover_preferences
+        c1, c2 = st.columns(2)
+        for i, (ico, name, desc) in enumerate(PREF_OPTIONS):
+            col = c1 if i % 2 == 0 else c2
+            with col:
+                is_sel = name in prefs
+                label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
+                if st.button(label, key=f"pref_{i}", use_container_width=True,
+                             type="primary" if is_sel else "secondary", help=desc):
+                    if is_sel: prefs.remove(name)
+                    else: prefs.append(name)
+                    st.session_state.discover_preferences = prefs
+                    st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        nav1, nav2, nav3 = st.columns([1, 2, 1])
+        with nav1:
+            if st.button("← Back", key="pref_back"):
+                st.session_state.screen = "interests"; st.rerun()
+        with nav2:
+            if st.button("Continue →", type="primary", use_container_width=True, key="pref_next"):
+                st.session_state.screen = "local_setup"; st.rerun()
+        with nav3:
+            if st.button("Skip", key="pref_skip"):
+                st.session_state.screen = "local_setup"; st.rerun()
+    st.stop()
+
+# ═══════════════════════════════════════════════════════════
+# SCREEN: LOCAL NEWS SETUP (Step 4 of 4 — optional)
+# ═══════════════════════════════════════════════════════════
+if st.session_state.screen == "local_setup":
+    _, ob_col, _ = st.columns([1, 3, 1])
+    with ob_col:
+        st.markdown('''<div class="ow-ob-header">
+          <div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="ow-ob-step">Step 4 of 4</span>
+            <div class="ow-ob-dots">
+              <div class="ow-ob-dot done"></div>
+              <div class="ow-ob-dot done"></div>
+              <div class="ow-ob-dot done"></div>
+              <div class="ow-ob-dot active"></div>
+            </div>
+          </div>
+        </div>''', unsafe_allow_html=True)
+        st.markdown('<div class="ow-local-icon">📍</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-h2">Stay connected to your community</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-sub">Discover relevant local reporting, community updates and official announcements from places that matter to you.</div>', unsafe_allow_html=True)
+
+        st.markdown("**Add your location (optional)**")
+        st.markdown('<div style="font-size:0.84rem;color:var(--muted);margin-bottom:12px">You can skip this step and set it later. We do not use your precise device location.</div>', unsafe_allow_html=True)
+        lc1, lc2 = st.columns(2)
+        city_val = lc1.text_input("City or region", key="local_city_input",
+                                   placeholder="e.g. Hyderabad, Pune, Delhi...",
+                                   value=st.session_state.local_city)
+        region_val = lc2.text_input("State or region (optional)", key="local_region_input",
+                                     placeholder="e.g. Telangana, Maharashtra...",
+                                     value=st.session_state.local_region)
+        st.checkbox("Include nearby areas and regional updates", key="local_nearby_cb")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        nav1, nav2, nav3 = st.columns([1, 2, 1])
+        with nav1:
+            if st.button("← Back", key="local_back"):
+                st.session_state.screen = "discover_prefs"; st.rerun()
+        with nav2:
+            if st.button("Continue →", type="primary", use_container_width=True, key="local_next"):
+                if city_val.strip():
+                    st.session_state.local_city = city_val.strip()
+                    st.session_state.local_region = region_val.strip()
+                    st.session_state.local_source_catalogue = {}
+                    st.session_state.local_sources_city = ""
+                st.session_state.screen = "review"; st.rerun()
+        with nav3:
+            if st.button("Skip", key="local_skip"):
+                st.session_state.screen = "review"; st.rerun()
+    st.stop()
+
+# ═══════════════════════════════════════════════════════════
+# SCREEN: REVIEW & START (Final step)
+# ═══════════════════════════════════════════════════════════
+if st.session_state.screen == "review":
+    _, ob_col, _ = st.columns([1, 3, 1])
+    with ob_col:
+        st.markdown('<div class="ow-ob-step" style="text-align:right;margin-bottom:20px">Final step</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-h2">🎉 Your knowledge feed is taking shape</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-sub">Here\'s a quick summary. You can go back and make changes anytime.</div>', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        all_t = all_topics_for_user()
+
+        # Profile
+        rv1, rv2 = st.columns([6, 1])
+        role_val = st.session_state.user_role or "Not specified"
+        rv1.markdown(f'<div class="ow-review-row"><div class="ow-review-icon">👤</div><div><div class="ow-review-label">Your profile</div><div class="ow-review-value">{role_val}</div></div></div>', unsafe_allow_html=True)
+        with rv2:
+            if st.button("✏️ Edit", key="rev_role"):
+                st.session_state.screen = "role_select"; st.rerun()
+
+        # Interests
+        ri1, ri2 = st.columns([6, 1])
+        interests_html = " ".join(f'<span style="background:var(--accent-bg);color:var(--blue);border-radius:20px;padding:2px 10px;font-size:0.78rem;margin:2px;display:inline-block">{t}</span>' for t in all_t) if all_t else '<span style="color:var(--muted)">None selected</span>'
+        ri1.markdown(f'<div class="ow-review-row"><div class="ow-review-icon">💡</div><div><div class="ow-review-label">Your interests</div><div class="ow-review-value" style="line-height:2.2">{interests_html}</div></div></div>', unsafe_allow_html=True)
+        with ri2:
+            if st.button("✏️ Edit", key="rev_int"):
+                st.session_state.screen = "interests"; st.rerun()
+
+        # Discover preferences
+        rp1, rp2 = st.columns([6, 1])
+        prefs = st.session_state.discover_preferences
+        prefs_html = " ".join(f'<span style="background:var(--accent-bg);color:var(--blue);border-radius:20px;padding:2px 10px;font-size:0.78rem;margin:2px;display:inline-block">{p}</span>' for p in prefs) if prefs else '<span style="color:var(--muted)">General knowledge</span>'
+        rp1.markdown(f'<div class="ow-review-row"><div class="ow-review-icon">🔍</div><div><div class="ow-review-label">What you want to discover</div><div class="ow-review-value" style="line-height:2.2">{prefs_html}</div></div></div>', unsafe_allow_html=True)
+        with rp2:
+            if st.button("✏️ Edit", key="rev_pref"):
+                st.session_state.screen = "discover_prefs"; st.rerun()
+
+        # Local news
+        rl1, rl2 = st.columns([6, 1])
+        city_display = st.session_state.local_city if st.session_state.local_city else "Not set (you can add this later)"
+        rl1.markdown(f'<div class="ow-review-row"><div class="ow-review-icon">📍</div><div><div class="ow-review-label">Local news</div><div class="ow-review-value">{city_display}</div></div></div>', unsafe_allow_html=True)
+        with rl2:
+            if st.button("✏️ Edit", key="rev_local"):
+                st.session_state.screen = "local_setup"; st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        nav1, nav2 = st.columns([1, 2])
+        with nav1:
+            if st.button("← Back", key="rev_back"):
+                st.session_state.screen = "local_setup"; st.rerun()
+        with nav2:
+            if st.button("Explore my Owlume feed  →", type="primary", use_container_width=True, key="rev_start"):
+                if all_topics_for_user():
+                    st.session_state.active_topic = all_topics_for_user()[0]
                 st.session_state.screen = "feed"; st.rerun()
     st.stop()
 
@@ -1425,59 +1847,82 @@ if st.session_state.screen == "interests":
 # SCREEN: SUBTOPICS (narrow each topic)
 # ═══════════════════════════════════════════════════════════
 if st.session_state.screen == "subtopics":
-    st.markdown('''<div class="ow-progress">
-      <div class="ow-dot done"></div>
-      <div class="ow-dot done"></div>
-      <div class="ow-dot active"></div>
-      <div class="ow-dot"></div>
-    </div>''', unsafe_allow_html=True)
+    _, sub_col, _ = st.columns([1, 3, 1])
+    with sub_col:
+        st.markdown('''<div class="ow-progress">
+          <div class="ow-dot done"></div>
+          <div class="ow-dot done"></div>
+          <div class="ow-dot active"></div>
+          <div class="ow-dot"></div>
+        </div>''', unsafe_allow_html=True)
 
-    st.markdown('<div class="ow-ob-h2">Narrow your interests</div>', unsafe_allow_html=True)
-    st.markdown('<div class="ow-ob-sub">Add subtopics to get a more precise feed. This is optional — you can adjust anytime.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-h2">Narrow your interests</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-sub">Pick subtopics for each interest. This is optional — skip to go straight to your feed.</div>', unsafe_allow_html=True)
 
-    all_t = all_topics_for_user()
-    if not all_t:
-        st.info("No topics selected — go back and pick some.")
-    else:
-        for topic in all_t:
-            st.markdown(f"**{topic_icon(topic)} {topic}**")
-            cur_subs = st.session_state.subtopics.get(topic, [])
+        all_t = all_topics_for_user()
+        if not all_t:
+            st.info("No topics selected — go back and pick some.")
+        else:
+            # ── ONE shared custom-subtopic input (no per-topic duplicate) ──
+            st.markdown("**Add a custom subtopic:**")
+            _sa, _sb, _sc = st.columns([2, 3, 1])
+            with _sa:
+                _sub_target = st.selectbox("Topic", all_t, key="sub_target_sel",
+                                           label_visibility="collapsed")
+            with _sb:
+                _sub_new = st.text_input("Custom subtopic", key="sub_custom_inp",
+                                         placeholder="e.g. maternal nutrition, AI policy…",
+                                         label_visibility="collapsed")
+            with _sc:
+                if st.button("Add", key="sub_add_shared"):
+                    _v = _sub_new.strip()
+                    if _v:
+                        _cur = st.session_state.subtopics.get(_sub_target, [])
+                        if _v not in _cur:
+                            _cur.append(_v)
+                            st.session_state.subtopics[_sub_target] = _cur
+                        st.rerun()
 
-            # Show catalogue subtopics as quick-add chips
-            cat_subs = TOPIC_CATALOGUE.get(topic, {}).get("subtopics", [])
-            if cat_subs:
-                chip_cols = st.columns(min(4, len(cat_subs)))
-                for ci, sub in enumerate(cat_subs[:8]):
-                    with chip_cols[ci % 4]:
-                        is_sel = sub in cur_subs
-                        lbl = f"✓ {sub}" if is_sel else sub
-                        if st.button(lbl, key=f"sub_cat_{topic}_{ci}",
-                                     type="primary" if is_sel else "secondary",
-                                     use_container_width=True):
-                            if is_sel: cur_subs.remove(sub)
-                            else: cur_subs.append(sub)
-                            st.session_state.subtopics[topic] = cur_subs; st.rerun()
+            st.markdown("---")
 
-            # Custom subtopic
-            cs1, cs2 = st.columns([4,1])
-            new_sub = cs1.text_input(f"Custom subtopic for {topic}", key=f"sub_inp_{topic}",
-                                     placeholder="e.g. maternal nutrition…", label_visibility="collapsed")
-            if cs2.button("Add", key=f"sub_add_{topic}") and new_sub.strip():
-                if new_sub.strip() not in cur_subs:
-                    cur_subs.append(new_sub.strip())
-                    st.session_state.subtopics[topic] = cur_subs; st.rerun()
-            st.markdown("<br>", unsafe_allow_html=True)
+            # ── Per-topic sections — chips only, collapsed by default ──
+            # (expander open only when subtopics already chosen)
+            for topic in all_t:
+                cur_subs = st.session_state.subtopics.get(topic, [])
+                cat_subs = TOPIC_CATALOGUE.get(topic, {}).get("subtopics", [])
+                _n = len(cur_subs)
+                _exp_lbl = (f"{topic_icon(topic)} {topic}  ·  {_n} selected"
+                            if _n else f"{topic_icon(topic)} {topic}")
+                with st.expander(_exp_lbl, expanded=bool(_n)):
+                    if cat_subs:
+                        _cc = st.columns(3)
+                        for _ci, _sub in enumerate(cat_subs[:9]):
+                            with _cc[_ci % 3]:
+                                _is = _sub in cur_subs
+                                if st.button(f"✓ {_sub}" if _is else _sub,
+                                             key=f"sub_cat_{topic}_{_ci}",
+                                             type="primary" if _is else "secondary",
+                                             use_container_width=True):
+                                    if _is: cur_subs.remove(_sub)
+                                    else: cur_subs.append(_sub)
+                                    st.session_state.subtopics[topic] = cur_subs
+                                    st.rerun()
+                    else:
+                        st.caption("No preset subtopics — use the custom input above.")
+                    if cur_subs:
+                        st.caption("Selected: " + ", ".join(cur_subs))
 
-    b1, b2, b3 = st.columns([1,2,1])
-    with b1:
-        if st.button("← Back", key="sub_back"):
-            st.session_state.screen = "interests"; st.rerun()
-    with b2:
-        if st.button("Continue →", type="primary", use_container_width=True, key="sub_cont"):
-            st.session_state.screen = "feed"; st.rerun()
-    with b3:
-        if st.button("Skip", key="sub_skip"):
-            st.session_state.screen = "feed"; st.rerun()
+        st.markdown("<br>", unsafe_allow_html=True)
+        sb1, sb2, sb3 = st.columns([1, 2, 1])
+        with sb1:
+            if st.button("← Back", key="sub_back"):
+                st.session_state.screen = "interests"; st.rerun()
+        with sb2:
+            if st.button("Continue →", type="primary", use_container_width=True, key="sub_cont"):
+                st.session_state.screen = "feed"; st.rerun()
+        with sb3:
+            if st.button("Skip", key="sub_skip"):
+                st.session_state.screen = "feed"; st.rerun()
     st.stop()
 
 # ═══════════════════════════════════════════════════════════
@@ -1526,6 +1971,8 @@ with sidebar_col:
             st.rerun()
 
     _tab_btn("🏠  Feed", "feed")
+    _tab_btn("📊  Daily Briefing", "briefing")
+    _tab_btn("🔔  Alerts", "alerts")
     _tab_btn("🔭  Discover Sources", "discover")
     _tab_btn("🔖  Saved Library", "saved")
     _tab_btn("🤖  Ask Owlume", "ask")
@@ -1723,6 +2170,91 @@ with main_col:
                 ans = _openai_call(prompt, mode="Research")
             st.session_state.chat_history.append({"role": "assistant", "content": ans}); st.rerun()
 
+
+  # ── DAILY BRIEFING tab ──
+  elif cur_tab == "briefing":
+    today_long = datetime.now().strftime("%A, %d %B %Y")
+    st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">📊 Daily Briefing</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">{today_long} · Personalised for your topics</div>', unsafe_allow_html=True)
+
+    top_arts = domain_articles[:12]
+    if not top_arts:
+        st.info("No articles in your feed yet — add some topics to get started.")
+    else:
+        src_count = len(set(a["source"] for a in top_arts))
+        st.markdown(f'''
+        <div class="ow-briefing">
+          <div class="ow-briefing-date">{today_long}</div>
+          <div class="ow-briefing-h">📰 Today's Top Stories</div>
+          <div class="ow-briefing-sub" style="margin-bottom:10px">{len(top_arts)} articles from {src_count} sources</div>
+          {"".join([f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.92);text-decoration:underline">{a["title"][:95]}</a></div>' for a in top_arts[:5]])}
+        </div>''', unsafe_allow_html=True)
+
+        for i, art in enumerate(top_arts[:10]):
+            rel = art.get("relevance", 0)
+            rel_badge = ""
+            if rel >= 0.6:
+                rel_badge = '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">●● High match</span>'
+            elif rel >= 0.3:
+                rel_badge = '<span style="background:#fff8e1;color:#e65100;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">● Relevant</span>'
+            st.markdown(f'''
+            <div class="ow-art-card">
+              <div class="ow-art-source">{art["source"]} · {art.get("date","")}{rel_badge}</div>
+              <a class="ow-art-title" href="{art["url"]}" target="_blank">{art["title"][:120]}</a>
+              <div class="ow-art-summary">{art.get("summary","")[:200]}</div>
+            </div>''', unsafe_allow_html=True)
+
+        st.markdown("---")
+        if st.button("🤖 Generate AI briefing for today", type="primary", key="gen_briefing_btn"):
+            with st.spinner("Generating your personalised briefing…"):
+                briefing_text = _openai_call(build_briefing_prompt(top_arts), mode="Digest")
+            st.session_state.briefing = briefing_text
+            st.rerun()
+
+        if st.session_state.get("briefing"):
+            with st.expander("🤖 AI Briefing", expanded=True):
+                st.markdown(st.session_state.briefing)
+                if st.button("Clear briefing", key="clear_briefing_btn"):
+                    st.session_state.briefing = None
+                    st.rerun()
+
+  # ── ALERTS tab ──
+  elif cur_tab == "alerts":
+    st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">🔔 Alerts</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">Track keywords — see matching articles from your current feed.</div>', unsafe_allow_html=True)
+
+    al1, al2 = st.columns([5, 1])
+    new_alert = al1.text_input("Alert keyword or phrase", key="new_alert_input",
+                                placeholder="e.g. CRISPR trial, climate policy, RBI rate…",
+                                label_visibility="collapsed")
+    if al2.button("+ Add", key="add_alert_btn", type="primary") and new_alert.strip():
+        current_alerts = st.session_state.get("alerts", [])
+        if new_alert.strip() not in current_alerts:
+            current_alerts.append(new_alert.strip())
+            st.session_state.alerts = current_alerts
+        st.rerun()
+
+    current_alerts = st.session_state.get("alerts", [])
+    if not current_alerts:
+        st.info("No alerts set yet. Enter a keyword above to track it across your feed.")
+    else:
+        st.markdown(f"**{len(current_alerts)} active alert{'s' if len(current_alerts)>1 else ''}**")
+        for ai2, alert_kw in enumerate(current_alerts):
+            matches = [a for a in domain_articles if alert_kw.lower() in a["title"].lower() or alert_kw.lower() in a.get("summary","").lower()]
+            ac1, ac2 = st.columns([5, 1])
+            ac1.markdown(f"🔔 **{alert_kw}** — {len(matches)} match{'es' if len(matches)!=1 else ''} in current feed")
+            if ac2.button("Remove", key=f"rm_alert_{ai2}", use_container_width=True):
+                current_alerts.pop(ai2)
+                st.session_state.alerts = current_alerts
+                st.rerun()
+            for match_art in matches[:3]:
+                st.markdown(
+                    f'<div style="margin:3px 0 3px 16px;font-size:0.86rem">'
+                    f'→ <a href="{match_art["url"]}" target="_blank" style="color:#3b5bdb">{match_art["title"][:100]}</a>'
+                    f' <span style="color:#94a3b8;font-size:0.78rem">({match_art.get("source","")})</span></div>',
+                    unsafe_allow_html=True)
+            if not matches:
+                st.caption("  No matches in current feed — check back when new articles load.")
 
   # ── LOCAL NEWS tab ──
   elif cur_tab == "local_news":
@@ -1928,13 +2460,20 @@ with main_col:
         sq = search.lower()
         articles = [a for a in articles if sq in a["title"].lower() or sq in a.get("summary","").lower()]
 
-    # Daily briefing card
+    # Daily briefing card — top stories
     today = datetime.now().strftime("%a, %d %b %Y")
+    top3 = domain_articles[:3]
+    briefing_items_html = "".join([
+        f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.9);text-decoration:underline">{a["title"][:85]}</a></div>'
+        for a in top3
+    ]) if top3 else '<div class="ow-briefing-item" style="opacity:0.7">Loading articles for your topics…</div>'
+    src_set = len(set(a["source"] for a in domain_articles)) if domain_articles else 0
     st.markdown(f'''
     <div class="ow-briefing">
       <div class="ow-briefing-date">{today}</div>
       <div class="ow-briefing-h">Your daily briefing</div>
-      <div class="ow-briefing-sub">{len(articles)} articles across your topics today</div>
+      <div class="ow-briefing-sub" style="margin-bottom:8px">{len(domain_articles)} articles from {src_set} sources today</div>
+      {briefing_items_html}
     </div>''', unsafe_allow_html=True)
 
     # Topic tabs
@@ -1992,19 +2531,37 @@ with main_col:
               <div class="ow-art-summary">{art.get("summary","")[:220]}</div>
             </div>''', unsafe_allow_html=True)
 
-            # Compact 3-action row — no visual clutter
-            act1, act2, act3, act4 = st.columns([2.5, 1.5, 1, 1])
+            # Compact 6-action toolbar: Summary | Takeaways | Why It Matters | Save | Read | Ask
+            act1, act2, act3, act4, act5, act6 = st.columns([1.4, 1.4, 1.7, 1.2, 0.8, 0.8])
 
             with act1:
-                if st.button("🤖 Summarise", key=f"sum_{ti}_{art_i}", use_container_width=True):
+                if st.button("📝 Summary", key=f"sum_{ti}_{art_i}", use_container_width=True,
+                             help="3-sentence AI summary"):
                     with st.spinner("Summarising…"):
                         result = _openai_call(build_summary_prompt(art["title"], art.get("summary","")), mode="Digest")
-                    # Show inline below the card using expander-like approach
                     st.session_state[f"inline_result_{ti}_{art_i}"] = result
                     st.session_state[f"inline_type_{ti}_{art_i}"] = "summary"
                     st.rerun()
 
             with act2:
+                if st.button("🔑 Takeaways", key=f"tkw_{ti}_{art_i}", use_container_width=True,
+                             help="Key takeaways as bullet points"):
+                    with st.spinner("Extracting takeaways…"):
+                        result = _openai_call(build_takeaways_prompt(art["title"], art.get("summary","")), mode="Digest")
+                    st.session_state[f"inline_result_{ti}_{art_i}"] = result
+                    st.session_state[f"inline_type_{ti}_{art_i}"] = "takeaways"
+                    st.rerun()
+
+            with act3:
+                if st.button("💡 Why It Matters", key=f"wim_{ti}_{art_i}", use_container_width=True,
+                             help="Broader significance & implications"):
+                    with st.spinner("Analysing significance…"):
+                        result = _openai_call(build_why_matters_prompt(art["title"], art.get("summary","")), mode="Digest")
+                    st.session_state[f"inline_result_{ti}_{art_i}"] = result
+                    st.session_state[f"inline_type_{ti}_{art_i}"] = "why_matters"
+                    st.rerun()
+
+            with act4:
                 bm_lbl = "★ Saved" if is_bm else "🔖 Save"
                 if st.button(bm_lbl, key=f"bm_{ti}_{art_i}", use_container_width=True):
                     if is_bm:
@@ -2014,7 +2571,7 @@ with main_col:
                         add_to_library(art)
                     st.rerun()
 
-            with act3:
+            with act5:
                 rd_lbl = "✓" if is_read else "👁"
                 if st.button(rd_lbl, key=f"rd_{ti}_{art_i}", use_container_width=True,
                              help="Mark as read"):
@@ -2025,7 +2582,7 @@ with main_col:
                         add_to_library(art)
                     st.rerun()
 
-            with act4:
+            with act6:
                 if st.button("Ask", key=f"ask_art_{ti}_{art_i}", use_container_width=True,
                              help="Ask Owlume about this article"):
                     st.session_state.chat_history = [
@@ -2034,10 +2591,13 @@ with main_col:
                     st.session_state.main_tab = "ask"
                     st.rerun()
 
-            # Inline AI result (shown below the card when triggered)
+            # Inline AI result — labelled by type
             ir_key = f"inline_result_{ti}_{art_i}"
             if ir_key in st.session_state and st.session_state[ir_key]:
-                with st.expander("🤖 AI Summary", expanded=True):
+                ir_type = st.session_state.get(f"inline_type_{ti}_{art_i}", "summary")
+                ir_labels = {"summary": "📝 AI Summary", "takeaways": "🔑 Key Takeaways", "why_matters": "💡 Why It Matters"}
+                ir_label = ir_labels.get(ir_type, "🤖 AI Result")
+                with st.expander(ir_label, expanded=True):
                     st.markdown(st.session_state[ir_key])
                     if st.button("Close", key=f"close_ir_{ti}_{art_i}"):
                         del st.session_state[ir_key]
