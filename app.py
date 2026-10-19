@@ -1085,54 +1085,105 @@ st.markdown("""
 
 body, .stApp { background: var(--bg) !important; }
 
-/* ── Welcome Screen ── */
-/* Full-page gradient via fixed background — no 100vh block that pushes button off-screen */
-.ow-welcome-bg {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: -1;
-  background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 50%, #f0f9ff 100%);
-  pointer-events: none;
-}
-/* Card sits in a centred column; no height set here so it takes its natural height */
-.ow-welcome-card {
-  background: white; border-radius: 20px; padding: 30px 36px 24px;
-  width: 100%; text-align: center;
-  box-shadow: 0 16px 48px rgba(59,91,219,0.13);
-  margin-bottom: 12px;
-}
-.ow-welcome-logo { width: 56px; height: 56px; border-radius: 14px; margin: 0 auto 12px; display: block; }
-.ow-welcome-h1 { font-size: 1.75rem; font-weight: 800; color: var(--navy); margin: 0 0 3px; }
-.ow-welcome-tag { color: var(--muted); font-size: 0.9rem; margin: 0 0 18px; font-style: italic; }
-.ow-feature { display: flex; align-items: center; gap: 12px; padding: 8px 0;
-  text-align: left; border-bottom: 1px solid var(--border); }
-.ow-feature:last-of-type { border-bottom: none; padding-bottom: 0; }
-.ow-feature-icon { width: 32px; height: 32px; border-radius: 8px;
-  background: var(--accent-bg); display: flex; align-items: center; justify-content: center;
-  font-size: 16px; flex-shrink: 0; }
-.ow-feature-text { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+/* ── Landing page v2 — two-column hero ── */
+/* Sentinel class on welcome screen for scoped CSS */
+html:has(.ow-screen-welcome) .stApp,
+html:has(.ow-screen-welcome) body { background: #FAFBFD !important; }
 
-/* ── Landing page ── */
-.ow-landing-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(255,255,255,0.96); backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+/* Hide Streamlit decorations on landing */
+html:has(.ow-screen-welcome) #MainMenu,
+html:has(.ow-screen-welcome) footer,
+html:has(.ow-screen-welcome) header { display: none !important; }
+
+/* Nav bar */
+.ow-lp-nav {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 40px;
+  padding: 16px 40px;
+  border-bottom: 1px solid #E2E8F0;
+  background: #FAFBFD;
+  margin: 0; width: 100%;
 }
-.ow-landing-brand { display: flex; align-items: center; gap: 8px; }
-.ow-landing-brand-name { font-size: 1.2rem; font-weight: 800; color: var(--navy); }
-.ow-landing-links { display: flex; gap: 24px; }
-.ow-landing-link { color: var(--muted); text-decoration: none; font-size: 0.88rem; font-weight: 500; }
-.ow-landing-link:hover { color: var(--blue); }
-.ow-landing-hero { text-align: center; padding: 0 20px 28px; }
-.ow-landing-h1 { font-size: 2.4rem; font-weight: 900; color: var(--navy);
-  line-height: 1.15; margin-bottom: 16px; }
-.ow-landing-sub { font-size: 1rem; color: var(--muted); line-height: 1.6;
-  max-width: 540px; margin: 0 auto 28px; }
-.ow-landing-features {
-  display: flex; justify-content: center; gap: 28px; flex-wrap: wrap;
-  margin-top: 18px; padding: 16px 0; border-top: 1px solid var(--border);
+.ow-lp-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.ow-lp-brand-name { font-size: 1.25rem; font-weight: 800; color: #172554; letter-spacing: -0.02em; }
+.ow-lp-links { display: flex; gap: 28px; }
+.ow-lp-link { color: #64748B; text-decoration: none; font-size: 0.9rem; font-weight: 500;
+  transition: color 0.15s; }
+.ow-lp-link:hover { color: #3B5FEF; }
+.ow-lp-nav-btn {
+  background: #3B5FEF; color: white; border: none; border-radius: 8px;
+  padding: 9px 22px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  transition: background 0.15s; font-family: inherit;
 }
-.ow-landing-feat { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+.ow-lp-nav-btn:hover { background: #2957D9; }
+
+/* Hero wrapper — covers full column space */
+.ow-lp-hero-left {
+  padding: 56px 20px 32px 40px;
+  display: flex; flex-direction: column; gap: 0;
+}
+.ow-lp-h1 {
+  font-size: 3.1rem; font-weight: 900; line-height: 1.1;
+  color: #172554; margin: 0 0 22px; letter-spacing: -0.025em;
+}
+.ow-lp-h1 .ow-lp-accent { color: #3B5FEF; }
+.ow-lp-sub {
+  font-size: 1.05rem; color: #64748B; line-height: 1.72;
+  margin: 0 0 32px; max-width: 400px;
+}
+
+/* Style the Streamlit primary button to look like the hero CTA */
+html:has(.ow-screen-welcome) [data-testid="stButton-primary"] button {
+  padding: 14px 36px !important;
+  font-size: 1rem !important; font-weight: 700 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(59,95,239,0.28) !important;
+  letter-spacing: 0 !important;
+  min-width: 180px !important;
+  background: #3B5FEF !important;
+  border-color: #3B5FEF !important;
+}
+html:has(.ow-screen-welcome) [data-testid="stButton-primary"] button:hover {
+  background: #2957D9 !important; border-color: #2957D9 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 24px rgba(59,95,239,0.36) !important;
+}
+/* Hero illustration column */
+.ow-lp-illus-wrap {
+  padding: 32px 40px 32px 20px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ow-lp-illus-wrap svg { width: 100%; max-width: 480px; height: auto; }
+
+/* Feature strip */
+.ow-lp-features {
+  display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;
+  padding: 24px 40px 32px; border-top: 1px solid #E2E8F0; margin-top: 8px;
+  background: #FAFBFD;
+}
+.ow-lp-feat {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.88rem; color: #64748B; font-weight: 500;
+}
+.ow-lp-feat-icon {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: #EEF2FF; display: flex; align-items: center; justify-content: center;
+  font-size: 17px; flex-shrink: 0; border: 1px solid #E0E9FF;
+}
+.ow-lp-footer {
+  text-align: center; padding: 10px 0 20px;
+  font-size: 0.78rem; color: #94a3b8;
+}
+.ow-lp-footer a { color: #94a3b8; text-decoration: none; }
+.ow-lp-footer a:hover { color: #64748B; }
+
+@media (max-width: 900px) {
+  .ow-lp-nav { padding: 14px 20px; }
+  .ow-lp-links { display: none; }
+  .ow-lp-hero-left { padding: 36px 20px 16px; }
+  .ow-lp-h1 { font-size: 2.2rem; }
+  .ow-lp-illus-wrap { padding: 16px 20px; }
+  .ow-lp-features { gap: 20px; padding: 20px; }
+}
 
 /* ── Onboarding layout ── */
 .ow-ob-h2 { font-size: 1.55rem; font-weight: 800; color: var(--navy); margin: 0 0 6px; }
@@ -1501,47 +1552,74 @@ By using Owlume you agree to use it for personal research only. Content is aggre
 # SCREEN: WELCOME
 # ═══════════════════════════════════════════════════════════
 if st.session_state.screen == "welcome":
-    st.markdown('<div class="ow-welcome-bg"></div>', unsafe_allow_html=True)
+    # Sentinel — CSS uses html:has(.ow-screen-welcome) to scope landing styles
+    st.markdown('<span class="ow-screen-welcome" style="display:none"></span>', unsafe_allow_html=True)
+
+    # ── Navigation bar ──────────────────────────────────────
     st.markdown("""
-    <div class="ow-landing-nav">
-      <div class="ow-landing-brand">
-        <span style="font-size:1.5rem">🦉</span>
-        <span class="ow-landing-brand-name">Owlume</span>
+    <nav class="ow-lp-nav">
+      <div class="ow-lp-brand">
+        <span style="font-size:1.55rem;line-height:1">🦉</span>
+        <span class="ow-lp-brand-name">Owlume</span>
       </div>
-      <div class="ow-landing-links">
-        <a href="#" class="ow-landing-link">About</a>
-        <a href="#" class="ow-landing-link">How it works</a>
-        <a href="#" class="ow-landing-link">Features</a>
+      <div class="ow-lp-links">
+        <a href="#" class="ow-lp-link">About</a>
+        <a href="#" class="ow-lp-link">How it works</a>
+        <a href="#" class="ow-lp-link">Features</a>
+      </div>
+      <button class="ow-lp-nav-btn"
+        onclick="(function(){var b=window.parent.document.querySelector('[data-testid=stBaseButton-primary]');if(b)b.click();})()">
+        Get started
+      </button>
+    </nav>
+    """, unsafe_allow_html=True)
+
+    # ── Hero: two-column layout ─────────────────────────────
+    lc, rc = st.columns([5, 6])
+
+    with lc:
+        st.markdown("""
+        <div class="ow-lp-hero-left">
+          <h1 class="ow-lp-h1">
+            Stay curious.<br>
+            Understand more.<br>
+            <span class="ow-lp-accent">Discover what matters.</span>
+          </h1>
+          <p class="ow-lp-sub">Your personal knowledge feed, bringing together the ideas,
+            research, news and developments that matter to you, with room to discover
+            what you haven&rsquo;t explored yet.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Get started  →", type="primary", key="welcome_start"):
+            st.session_state.screen = "role_select"; st.rerun()
+
+    with rc:
+        _owl_svg = """<svg viewBox="0 0 480 440" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:480px;height:auto"><defs><radialGradient id="bgG" cx="46%" cy="48%" r="44%"><stop offset="0%" stop-color="#DBEAFE" stop-opacity="0.6"/><stop offset="100%" stop-color="#FAFBFD" stop-opacity="0"/></radialGradient><linearGradient id="owlB" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5B7FFF"/><stop offset="100%" stop-color="#2957D9"/></linearGradient><linearGradient id="owlW" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B5FEF"/><stop offset="100%" stop-color="#1D4ED8"/></linearGradient><filter id="cSh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#3B5FEF" flood-opacity="0.13"/></filter><filter id="oSh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#3B5FEF" flood-opacity="0.28"/></filter></defs><ellipse cx="222" cy="218" rx="195" ry="185" fill="url(#bgG)"/><ellipse cx="222" cy="215" rx="152" ry="145" fill="none" stroke="#E0E9FF" stroke-width="1.5" stroke-dasharray="6,9"/><g stroke="#C7D8F0" stroke-width="1.5" stroke-dasharray="5,7" fill="none"><line x1="212" y1="177" x2="177" y2="97"/><line x1="232" y1="175" x2="294" y2="88"/><line x1="258" y1="200" x2="358" y2="167"/><line x1="250" y1="242" x2="312" y2="322"/><line x1="192" y1="242" x2="113" y2="318"/></g><g fill="#93C5FD"><circle cx="192" cy="137" r="3.5"/><circle cx="263" cy="132" r="3.5"/><circle cx="309" cy="184" r="3"/><circle cx="281" cy="283" r="3"/><circle cx="152" cy="281" r="3"/></g><rect x="108" y="28" width="122" height="62" rx="14" fill="white" filter="url(#cSh)"/><rect x="108" y="28" width="122" height="8" rx="14" fill="#3B5FEF"/><rect x="108" y="32" width="122" height="4" fill="#3B5FEF"/><text x="169" y="58" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16">&#x1F52C;</text><text x="169" y="78" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12.5" font-weight="700" fill="#172554">Research</text><rect x="262" y="22" width="108" height="62" rx="14" fill="white" filter="url(#cSh)"/><rect x="262" y="22" width="108" height="8" rx="14" fill="#7048E8"/><rect x="262" y="26" width="108" height="4" fill="#7048E8"/><text x="316" y="52" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16">&#x1F4F0;</text><text x="316" y="72" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12.5" font-weight="700" fill="#172554">News</text><rect x="345" y="140" width="125" height="62" rx="14" fill="white" filter="url(#cSh)"/><rect x="345" y="140" width="125" height="8" rx="14" fill="#0891B2"/><rect x="345" y="144" width="125" height="4" fill="#0891B2"/><text x="407" y="174" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16">&#x26A1;</text><text x="407" y="193" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12.5" font-weight="700" fill="#172554">Technology</text><rect x="262" y="310" width="108" height="62" rx="14" fill="white" filter="url(#cSh)"/><rect x="262" y="310" width="108" height="8" rx="14" fill="#16A34A"/><rect x="262" y="314" width="108" height="4" fill="#16A34A"/><text x="316" y="347" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16">&#x1F3DB;</text><text x="316" y="363" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12.5" font-weight="700" fill="#172554">Policy</text><rect x="50" y="305" width="112" height="62" rx="14" fill="white" filter="url(#cSh)"/><rect x="50" y="305" width="112" height="8" rx="14" fill="#F59E0B"/><rect x="50" y="309" width="112" height="4" fill="#F59E0B"/><text x="106" y="342" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16">&#x1F4A1;</text><text x="106" y="358" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12.5" font-weight="700" fill="#172554">Ideas</text><g filter="url(#oSh)"><ellipse cx="173" cy="238" rx="32" ry="48" fill="#2957D9" transform="rotate(-14 173 238)"/><ellipse cx="271" cy="238" rx="32" ry="48" fill="#2957D9" transform="rotate(14 271 238)"/><ellipse cx="222" cy="244" rx="54" ry="60" fill="url(#owlB)"/><ellipse cx="222" cy="252" rx="28" ry="34" fill="#6B8FFF" opacity="0.35"/><ellipse cx="222" cy="192" rx="43" ry="40" fill="url(#owlW)"/><polygon points="199,162 206,180 214,162" fill="#2957D9"/><polygon points="230,160 237,180 244,160" fill="#2957D9"/><ellipse cx="222" cy="195" rx="32" ry="29" fill="#EEF2FF"/><circle cx="210" cy="191" r="12" fill="white" stroke="#CBD5E1" stroke-width="1"/><circle cx="234" cy="191" r="12" fill="white" stroke="#CBD5E1" stroke-width="1"/><circle cx="210" cy="191" r="8" fill="#172554"/><circle cx="234" cy="191" r="8" fill="#172554"/><circle cx="210" cy="191" r="4.5" fill="#0F172A"/><circle cx="234" cy="191" r="4.5" fill="#0F172A"/><circle cx="212" cy="188" r="2.8" fill="white"/><circle cx="236" cy="188" r="2.8" fill="white"/><polygon points="222,203 215,215 229,215" fill="#F59E0B"/><polygon points="222,209 216,215 228,215" fill="#D97706"/><ellipse cx="207" cy="297" rx="10" ry="5" fill="#1D4ED8"/><ellipse cx="237" cy="297" rx="10" ry="5" fill="#1D4ED8"/></g><circle cx="80" cy="162" r="5" fill="#BFDBFE" opacity="0.65"/><circle cx="58" cy="244" r="3.5" fill="#C7D2FE" opacity="0.55"/><circle cx="370" cy="278" r="4" fill="#BFDBFE" opacity="0.65"/><circle cx="420" cy="98" r="3" fill="#C7D2FE" opacity="0.55"/><circle cx="138" cy="385" r="4" fill="#BFDBFE" opacity="0.50"/><circle cx="376" cy="390" r="3.5" fill="#C7D2FE" opacity="0.50"/></svg>"""
+        st.markdown(f'<div class="ow-lp-illus-wrap">{_owl_svg}</div>', unsafe_allow_html=True)
+    # ── Feature strip ───────────────────────────────────────
+    st.markdown("""
+    <div class="ow-lp-features">
+      <div class="ow-lp-feat">
+        <div class="ow-lp-feat-icon">📰</div>
+        <span>Personalised feed</span>
+      </div>
+      <div class="ow-lp-feat">
+        <div class="ow-lp-feat-icon">📈</div>
+        <span>Emerging trends</span>
+      </div>
+      <div class="ow-lp-feat">
+        <div class="ow-lp-feat-icon">🔗</div>
+        <span>Trusted sources</span>
+      </div>
+      <div class="ow-lp-feat">
+        <div class="ow-lp-feat-icon">🌐</div>
+        <span>Broader perspective</span>
       </div>
     </div>
+    <div class="ow-lp-footer">
+      <a href="?page=privacy">Privacy</a>&nbsp;·&nbsp;<a href="?page=tos">Terms</a>
+    </div>
     """, unsafe_allow_html=True)
-    st.markdown('<div style="height:90px"></div>', unsafe_allow_html=True)
-    _, wcol, _ = st.columns([1, 3, 1])
-    with wcol:
-        st.markdown("""
-        <div class="ow-landing-hero">
-          <div class="ow-landing-h1">Stay curious.<br>Understand more.<br>
-            <span style="color:var(--blue)">Discover what matters.</span>
-          </div>
-          <div class="ow-landing-sub">Your personal knowledge feed, bringing together the ideas, research,
-            news and developments that matter to you, with room to discover what you haven\'t explored yet.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Get started  →", type="primary", use_container_width=True, key="welcome_start"):
-            st.session_state.screen = "role_select"; st.rerun()
-        st.markdown("""
-        <div class="ow-landing-features">
-          <div class="ow-landing-feat">📰 Personalised feed</div>
-          <div class="ow-landing-feat">📈 Emerging trends</div>
-          <div class="ow-landing-feat">🔗 Trusted sources</div>
-          <div class="ow-landing-feat">🌐 Broader perspective</div>
-        </div>
-        <div style="text-align:center;margin-top:12px">
-          <a href="?page=privacy" style="color:#94a3b8;font-size:0.78rem">Privacy</a>
-          &nbsp;·&nbsp;
-          <a href="?page=tos" style="color:#94a3b8;font-size:0.78rem">Terms</a>
-        </div>
-        """, unsafe_allow_html=True)
     st.stop()
 
 # ═══════════════════════════════════════════════════════════
