@@ -1498,8 +1498,12 @@ if st.session_state.screen == "welcome":
     if "ow_start" in _qp_w:
         st.query_params.clear()
         st.session_state.screen = "role_select"; st.rerun()
+    # Hidden sidebar trigger for welcome → role_select
+    with st.sidebar:
+        if st.button("__ow_start__", key="_sbtrig_start"):
+            st.session_state.screen = "role_select"; st.rerun()
     # Sentinel class → scopes all html:has(.ow-screen-welcome) CSS
-    st.markdown('<span class="ow-screen-welcome" style="display:none"></span>', unsafe_allow_html=True)
+    st.markdown('<span class="ow-screen-welcome" style="display:none"></span><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" onload="window._owTrig=function(l){var sb=document.querySelector(\'[data-testid=stSidebar]\');var p=sb?sb.querySelectorAll(\'button\'):document.querySelectorAll(\'button\');for(var i=0;i<p.length;i++){if(p[i].textContent.trim()===l){p[i].click();return;}}}" style="display:none">', unsafe_allow_html=True)
 
     # ── Navigation bar ──────────────────────────────────────────────────────
     st.markdown(f"""
@@ -1517,7 +1521,7 @@ if st.session_state.screen == "welcome":
         <a href="#" style="color:#64748B;text-decoration:none;font-size:0.9rem;font-weight:500;">How it works</a>
         <a href="#" style="color:#64748B;text-decoration:none;font-size:0.9rem;font-weight:500;">Features</a>
       </div>
-      <a href="?ow_start=1" style="background:#3B5FEF;color:#fff;text-decoration:none;border-radius:8px;padding:9px 22px;font-size:0.9rem;font-weight:600;font-family:inherit;display:inline-block;">Get started</a>
+      <span onclick="window._owTrig('__ow_start__')" style="background:#3B5FEF;color:#fff;text-decoration:none;border-radius:8px;padding:9px 22px;font-size:0.9rem;font-weight:600;font-family:inherit;display:inline-block;cursor:pointer;">Get started</span>
     </nav>
     """, unsafe_allow_html=True)
 
@@ -1545,11 +1549,11 @@ if st.session_state.screen == "welcome":
         # CTA button — HTML anchor (no Streamlit button needed)
         st.markdown('''
         <div style="padding-left:48px;padding-bottom:24px;">
-          <a href="?ow_start=1" style="display:inline-block;background:#3B5FEF;color:#fff;
-              text-decoration:none;border-radius:8px;padding:12px 28px;font-size:1rem;
-              font-weight:700;font-family:system-ui,-apple-system,sans-serif;">
+          <span onclick="window._owTrig('__ow_start__')" style="display:inline-block;background:#3B5FEF;color:#fff;
+              border-radius:8px;padding:12px 28px;font-size:1rem;
+              font-weight:700;font-family:system-ui,-apple-system,sans-serif;cursor:pointer;">
             Get started &#8594;
-          </a>
+          </span>
         </div>
         ''', unsafe_allow_html=True)
 
@@ -1647,7 +1651,7 @@ if st.session_state.screen == "role_select":
                     f'margin-top:3px;line-height:1.4;">{desc}</div>'
                     if desc else "")
         cards_html += (
-            f'<div onclick="owTrig(\'__ow_role_{role_id}__\')" style="cursor:pointer;display:block;">' +
+            f'<div onclick="window._owTrig(\'__ow_role_{role_id}__\')" style="cursor:pointer;display:block;">' +
             f'<div style="position:relative;display:flex;align-items:center;gap:14px;padding:14px 16px;border:1.5px solid {border};background:{bg};border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);min-height:76px;box-sizing:border-box;">' +
             chk +
             f'<span style="font-size:1.55rem;flex-shrink:0;line-height:1;">{icon}</span>' +
@@ -1659,15 +1663,7 @@ if st.session_state.screen == "role_select":
     cards_html += '<div style="visibility:hidden;pointer-events:none;"></div>'
 
     st.markdown(f"""
-<script>
-function owTrig(label){{
-  var sb=document.querySelector('[data-testid="stSidebar"]');
-  var pool=sb?sb.querySelectorAll('button'):document.querySelectorAll('button');
-  for(var i=0;i<pool.length;i++){{
-    if(pool[i].textContent.trim()===label){{pool[i].click();return;}}
-  }}
-}}
-</script>
+<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" onload="window._owTrig=function(l){{var sb=document.querySelector('[data-testid=stSidebar]');var p=sb?sb.querySelectorAll('button'):document.querySelectorAll('button');for(var i=0;i<p.length;i++){{if(p[i].textContent.trim()===l){{p[i].click();return;}}}}}}" style="display:none">
 <style>
 [data-testid="stSidebar"]{{display:none!important;}}
 .ow-rs div[onclick]:hover > div{{border-color:#93B4FF!important;background:#F5F8FF!important;}}
@@ -1690,7 +1686,7 @@ function owTrig(label){{
           <div style="width:20px;height:5px;border-radius:3px;background:#E2E8F0;"></div>
         </div>
       </div>
-      <span onclick="owTrig('__ow_skip__')"
+      <span onclick="window._owTrig('__ow_skip__')"
             style="font-size:0.83rem;color:#64748B;font-weight:500;padding:5px 14px;
                    border:1.5px solid #E2E8F0;border-radius:20px;background:#fff;cursor:pointer;">Skip</span>
     </div>
@@ -1701,11 +1697,11 @@ function owTrig(label){{
 {cards_html}
   </div>
   <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 0 24px;">
-    <span onclick="owTrig('__ow_back__')"
+    <span onclick="window._owTrig('__ow_back__')"
           style="display:inline-flex;align-items:center;gap:5px;font-size:0.88rem;font-weight:600;
                  color:#475569;padding:9px 20px;border:1.5px solid #E2E8F0;border-radius:22px;
                  background:#fff;cursor:pointer;">← Back</span>
-    <span onclick="owTrig('__ow_next__')"
+    <span onclick="window._owTrig('__ow_next__')"
           style="display:inline-flex;align-items:center;gap:5px;font-size:0.88rem;font-weight:600;
                  color:#fff;padding:9px 22px;border-radius:22px;background:#3B5FEF;cursor:pointer;">
       Continue →</span>
