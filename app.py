@@ -1649,24 +1649,19 @@ if st.session_state.screen == "role_select":
         desc_row = (f'<div style="color:#64748B;font-size:0.78rem;'
                     f'margin-top:3px;line-height:1.4;">{desc}</div>'
                     if desc else "")
-        cards_html += f"""
-<a href="?ow_role={role_id}" style="text-decoration:none;display:block;">
-  <div style="position:relative;display:flex;align-items:center;gap:14px;
-              padding:14px 16px;border:1.5px solid {border};background:{bg};
-              border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);
-              cursor:pointer;min-height:76px;box-sizing:border-box;">
-    {chk}
-    <span style="font-size:1.55rem;flex-shrink:0;line-height:1;">{icon}</span>
-    <div style="text-align:left;min-width:0;">
-      <div style="font-weight:700;color:#172554;font-size:0.9rem;
-                  line-height:1.3;word-break:break-word;">{title}</div>
-      {desc_row}
-    </div>
-  </div>
-</a>"""
+        cards_html += (
+            f'<a href="?ow_role={role_id}" style="text-decoration:none;display:block;">' +
+            f'<div style="position:relative;display:flex;align-items:center;gap:14px;padding:14px 16px;border:1.5px solid {border};background:{bg};border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;min-height:76px;box-sizing:border-box;">' +
+            chk +
+            f'<span style="font-size:1.55rem;flex-shrink:0;line-height:1;">{icon}</span>' +
+            f'<div style="text-align:left;min-width:0;">' +
+            f'<div style="font-weight:700;color:#172554;font-size:0.9rem;line-height:1.3;word-break:break-word;">{title}</div>' +
+            desc_row +
+            '</div></div></a>'
+        )
 
     # Ninth placeholder so the 8-card grid doesn't stretch the last two cards
-    cards_html += '\n<div style="visibility:hidden;pointer-events:none;"></div>'
+    cards_html += '<div style="visibility:hidden;pointer-events:none;"></div>'
 
     st.markdown(f"""
 <style>
@@ -1719,7 +1714,7 @@ if st.session_state.screen == "role_select":
   <!-- ── Card grid — 3 columns, 8 cards + 1 ghost ──────── -->
   <div class="ow-rs-grid"
        style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
-    {cards_html}
+{cards_html}
   </div>
 
   <!-- ── Navigation ────────────────────────────────────── -->
