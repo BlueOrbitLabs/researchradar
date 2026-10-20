@@ -1081,6 +1081,9 @@ if "ow_role" in _nav:
 if "ow_skip" in _nav or ("ow_next" in _nav):
     st.query_params.clear()
     st.session_state.screen = "interests"; st.rerun()
+if "ow_skip2" in _nav:
+    st.query_params.clear()
+    st.session_state.screen = "discover_prefs"; st.rerun()
 if "ow_back" in _nav:
     st.query_params.clear()
     st.session_state.screen = "welcome"; st.rerun()
@@ -1185,6 +1188,18 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button {
 html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
   background: var(--hover-blue) !important; border-color: var(--hover-blue) !important;
 }
+/* Topic-grid selected state: pale-blue border + background, NOT solid blue */
+.ow-topic-grid [data-testid="stButton-primary"] button {
+  background: #EEF4FF !important; border: 2px solid #3B5FEF !important;
+  color: #172554 !important; box-shadow: none !important;
+}
+.ow-topic-grid [data-testid="stButton-primary"] button:hover {
+  background: #E0EAFF !important;
+}
+/* Skip link in onboarding header */
+.ow-skip-link { padding:6px 16px; border:1.5px solid #CBD5E1; border-radius:20px;
+  font-size:0.82rem; color:#475569; text-decoration:none; font-weight:500; }
+.ow-skip-link:hover { border-color:#94a3b8; color:#334155; }
 
 /* Description text rendered below each role/interest card */
 .ow-role-desc {
@@ -1197,8 +1212,7 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
   text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 8px; }
 
 /* Can't find topic — compact horizontal row */
-.ow-cant-find { margin: 14px 0 0; padding: 12px 14px; background: #f8fafc;
-  border: 1px solid var(--border); border-radius: 10px; }
+.ow-cant-find { margin: 14px 0 0; padding: 0; background: transparent; border: none; }
 .ow-cant-find-h { font-weight: 700; color: var(--navy); font-size: 0.88rem; margin-bottom: 2px; }
 .ow-cant-find-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 8px; }
 
@@ -1716,19 +1730,22 @@ if st.session_state.screen == "role_select":
 if st.session_state.screen == "interests":
     _, ob_col, _ = st.columns([1, 3, 1])
     with ob_col:
-        st.markdown('''<div class="ow-ob-header">
-          <div></div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="ow-ob-step">Step 2 of 4</span>
-            <div class="ow-ob-dots">
-              <div class="ow-ob-dot done"></div>
-              <div class="ow-ob-dot active"></div>
-              <div class="ow-ob-dot future"></div>
-              <div class="ow-ob-dot future"></div>
+        st.markdown(f'''<div class="ow-ob-header">
+          <div style="display:flex;align-items:center;gap:8px">{LOGO_TAG}<span style="font-weight:700;font-size:0.95rem;color:#172554">Owlume</span></div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="ow-ob-step">Step 2 of 4</span>
+              <div class="ow-ob-dots">
+                <div class="ow-ob-dot done"></div>
+                <div class="ow-ob-dot active"></div>
+                <div class="ow-ob-dot future"></div>
+                <div class="ow-ob-dot future"></div>
+              </div>
             </div>
+            <a href="?ow_skip2=1" target="_self" class="ow-skip-link">Skip</a>
           </div>
         </div>''', unsafe_allow_html=True)
-        st.markdown('<div class="ow-ob-h2">What are you curious about?</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-ob-h2">🎯 What are you curious about?</div>', unsafe_allow_html=True)
         st.markdown('<div class="ow-ob-sub">Choose your interests. Mix familiar subjects with topics you\'ve always wanted to explore.</div>', unsafe_allow_html=True)
 
         # Global search
@@ -1751,8 +1768,9 @@ if st.session_state.screen == "interests":
 
         # Card grid — 3 per row; help= puts description in title attr → CSS ::after renders it
         if visible:
-            cols_per_row = 3
+            cols_per_row = 4
             rows = [visible[i:i+cols_per_row] for i in range(0, len(visible), cols_per_row)]
+            st.markdown('<div class="ow-topic-grid">', unsafe_allow_html=True)
             for row in rows:
                 cols = st.columns(len(row))
                 for ci, name in enumerate(row):
@@ -1766,14 +1784,15 @@ if st.session_state.screen == "interests":
                             if is_sel: st.session_state.selected_topics.remove(name)
                             else: st.session_state.selected_topics.append(name)
                             st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
         # Show More / Show Less
         if not topic_q.strip():
             if not st.session_state.show_all_topics:
-                if st.button("More topics  ↓", key="show_more", use_container_width=True):
+                if st.button("More topics  ↓", key="show_more"):
                     st.session_state.show_all_topics = True; st.rerun()
             else:
-                if st.button("Show less  ↑", key="show_less", use_container_width=True):
+                if st.button("Show less  ↑", key="show_less"):
                     st.session_state.show_all_topics = False; st.rerun()
 
         # ── Subtopic expanders — only for selected catalogue topics (not local, not custom) ──
@@ -1896,7 +1915,7 @@ if st.session_state.screen == "interests":
 
         # Footer nav
         st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        nav1, nav2, nav3 = st.columns([1, 2, 1])
+        nav1, nav2 = st.columns([1, 2])
         with nav1:
             if st.button("← Back", key="ob_back"):
                 st.session_state.screen = "role_select"; st.rerun()
@@ -1904,9 +1923,6 @@ if st.session_state.screen == "interests":
             has_topics = len(all_topics_for_user()) > 0
             if st.button("Continue →", type="primary", use_container_width=True, key="ob_next",
                          disabled=not has_topics):
-                st.session_state.screen = "discover_prefs"; st.rerun()
-        with nav3:
-            if st.button("Skip for now", key="ob_skip"):
                 st.session_state.screen = "discover_prefs"; st.rerun()
     st.stop()
 
