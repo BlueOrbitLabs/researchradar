@@ -1494,6 +1494,10 @@ By using Owlume you agree to use it for personal research only. Content is aggre
 # SCREEN: WELCOME
 # ═══════════════════════════════════════════════════════════
 if st.session_state.screen == "welcome":
+    _qp_w = st.query_params
+    if "ow_start" in _qp_w:
+        st.query_params.clear()
+        st.session_state.screen = "role_select"; st.rerun()
     # Sentinel class → scopes all html:has(.ow-screen-welcome) CSS
     st.markdown('<span class="ow-screen-welcome" style="display:none"></span>', unsafe_allow_html=True)
 
@@ -1504,7 +1508,7 @@ if st.session_state.screen == "welcome":
         font-family:system-ui,-apple-system,sans-serif;box-sizing:border-box;width:100%;
         position:relative;z-index:10;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <img src="data:image/png;base64,{{LOGO_B64}}"
+        <img src="data:image/png;base64,{LOGO_B64}"
              style="width:36px;height:36px;border-radius:9px;object-fit:contain;">
         <span style="font-size:1.2rem;font-weight:800;color:#172554;letter-spacing:-0.02em;">Owlume</span>
       </div>
@@ -1513,11 +1517,7 @@ if st.session_state.screen == "welcome":
         <a href="#" style="color:#64748B;text-decoration:none;font-size:0.9rem;font-weight:500;">How it works</a>
         <a href="#" style="color:#64748B;text-decoration:none;font-size:0.9rem;font-weight:500;">Features</a>
       </div>
-      <button style="background:#3B5FEF;color:#fff;border:none;border-radius:8px;
-          padding:9px 22px;font-size:0.9rem;font-weight:600;cursor:pointer;font-family:inherit;"
-        onclick="(function(){{var b=window.parent.document.querySelector('[data-testid=stBaseButton-primary]');if(b)b.click();}})()">
-        Get started
-      </button>
+      <a href="?ow_start=1" style="background:#3B5FEF;color:#fff;text-decoration:none;border-radius:8px;padding:9px 22px;font-size:0.9rem;font-weight:600;font-family:inherit;display:inline-block;">Get started</a>
     </nav>
     """, unsafe_allow_html=True)
 
@@ -1542,17 +1542,22 @@ if st.session_state.screen == "welcome":
           </p>
         </div>
         """, unsafe_allow_html=True)
-        # CTA button — left-indented to align with h1 text
-        st.markdown('<div style="padding-left:48px;padding-bottom:24px;">', unsafe_allow_html=True)
-        if st.button("Get started  →", type="primary", key="welcome_start"):
-            st.session_state.screen = "role_select"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # CTA button — HTML anchor (no Streamlit button needed)
+        st.markdown('''
+        <div style="padding-left:48px;padding-bottom:24px;">
+          <a href="?ow_start=1" style="display:inline-block;background:#3B5FEF;color:#fff;
+              text-decoration:none;border-radius:8px;padding:12px 28px;font-size:1rem;
+              font-weight:700;font-family:system-ui,-apple-system,sans-serif;">
+            Get started &#8594;
+          </a>
+        </div>
+        ''', unsafe_allow_html=True)
 
     with _rc:
         st.markdown(f"""
         <div style="display:flex;align-items:center;justify-content:center;
             padding:16px 24px 0 0;height:100%;box-sizing:border-box;">
-          <img src="data:image/png;base64,{{HERO_B64}}"
+          <img src="data:image/png;base64,{HERO_B64}"
                style="width:100%;max-width:540px;height:auto;object-fit:contain;display:block;
                       filter:drop-shadow(0 6px 24px rgba(59,95,239,0.12));"
                alt="Owlume knowledge categories">
