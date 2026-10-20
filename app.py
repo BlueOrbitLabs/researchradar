@@ -1205,13 +1205,24 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button {
 html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
   background: var(--hover-blue) !important; border-color: var(--hover-blue) !important;
 }
-/* Selection screens (interests + discover_prefs): vivid highlight */
+/* Selection screens (interests + discover_prefs): pale-blue bg + blue border + checkmark badge */
 html:has(.ow-selection-screen) [data-testid="stButton-primary"] button {
-  background: #1D4ED8 !important; border: 2px solid #1D4ED8 !important;
-  color: #ffffff !important; box-shadow: 0 2px 8px rgba(29,78,216,0.35) !important;
+  background: #EEF4FF !important; border: 2px solid #3B5FEF !important;
+  color: #172554 !important; box-shadow: none !important;
+  position: relative !important;
 }
 html:has(.ow-selection-screen) [data-testid="stButton-primary"] button:hover {
-  background: #1E40AF !important; border-color: #1E40AF !important;
+  background: #E0EAFF !important; border-color: #2B4FDF !important;
+}
+/* Blue checkmark badge in top-right corner */
+html:has(.ow-selection-screen) [data-testid="stButton-primary"] button::after {
+  content: "✓";
+  position: absolute; top: 5px; right: 7px;
+  width: 17px; height: 17px;
+  background: #3B5FEF; color: #fff; border-radius: 50%;
+  font-size: 9px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 17px; text-align: center;
 }
 /* Skip link in onboarding header */
 .ow-skip-link { padding:6px 16px; border:1.5px solid #CBD5E1; border-radius:20px;
@@ -1795,7 +1806,7 @@ if st.session_state.screen == "interests":
                         ico = topic_icon(name)
                         desc = TOPIC_DESCRIPTIONS.get(name, "")
                         is_sel = name in sel
-                        label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
+                        label = f"{ico}  {name}"
                         if st.button(label, key=f"chip_{name}", use_container_width=True,
                                      type="primary" if is_sel else "secondary"):
                             if is_sel: st.session_state.selected_topics.remove(name)
@@ -1958,7 +1969,7 @@ if st.session_state.screen == "discover_prefs":
             col = c1 if i % 2 == 0 else c2
             with col:
                 is_sel = name in prefs
-                label = f"{'✓ ' if is_sel else ''}{ico}  {name}"
+                label = f"{ico}  {name}"
                 if st.button(label, key=f"pref_{i}", use_container_width=True,
                              type="primary" if is_sel else "secondary"):
                     if is_sel: prefs.remove(name)
