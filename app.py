@@ -1209,7 +1209,11 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
 html:has(.ow-selection-screen) [data-testid="stButton-primary"] button {
   background: #EEF4FF !important; border: 2px solid #3B5FEF !important;
   color: #172554 !important; box-shadow: none !important;
-  position: relative !important;
+  position: relative !important; overflow: visible !important;
+}
+/* Also make the wrapper visible so badge isn't clipped */
+html:has(.ow-selection-screen) [data-testid="stButton-primary"] {
+  overflow: visible !important;
 }
 html:has(.ow-selection-screen) [data-testid="stButton-primary"] button:hover {
   background: #E0EAFF !important; border-color: #2B4FDF !important;
