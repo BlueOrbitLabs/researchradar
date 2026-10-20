@@ -1509,8 +1509,8 @@ if st.session_state.screen == "welcome":
         position:relative;z-index:10;">
       <div style="display:flex;align-items:center;gap:10px;">
         <img src="data:image/png;base64,{LOGO_B64}"
-             style="width:36px;height:36px;border-radius:9px;object-fit:contain;">
-        <span style="font-size:1.2rem;font-weight:800;color:#172554;letter-spacing:-0.02em;">Owlume</span>
+             style="width:48px;height:48px;border-radius:9px;object-fit:contain;">
+        <span style="font-size:1.5rem;font-weight:800;color:#172554;letter-spacing:-0.02em;">Owlume</span>
       </div>
       <div style="display:flex;gap:28px;">
         <a href="#" style="color:#64748B;text-decoration:none;font-size:0.9rem;font-weight:500;">About</a>
@@ -1685,8 +1685,8 @@ if st.session_state.screen == "role_select":
               padding:20px 0 26px;">
     <div style="display:flex;align-items:center;gap:10px;">
       <img src="data:image/png;base64,{LOGO_B64}"
-           style="height:30px;object-fit:contain;" alt="Owlume">
-      <span style="font-size:1.05rem;font-weight:700;color:#172554;">Owlume</span>
+           style="height:48px;object-fit:contain;" alt="Owlume">
+      <span style="font-size:1.5rem;font-weight:800;color:#172554;letter-spacing:-0.02em;">Owlume</span>
     </div>
     <div style="display:flex;align-items:center;gap:14px;">
       <div style="display:flex;align-items:center;gap:8px;">
