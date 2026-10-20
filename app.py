@@ -1057,6 +1057,13 @@ DEFAULTS = {
 for k, v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k] = v
 
+# ── Dev: ?dev_reset=1 forces a fresh welcome session ────────────────────────
+if st.query_params.get("dev_reset"):
+    for _k in list(st.session_state.keys()):
+        del st.session_state[_k]
+    st.query_params.clear()
+    st.rerun()
+
 # ═══════════════════════════════════════════════════════════
 # CSS  — light theme, navy/blue/violet palette
 # ═══════════════════════════════════════════════════════════
