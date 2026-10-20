@@ -1188,12 +1188,12 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button {
 html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
   background: var(--hover-blue) !important; border-color: var(--hover-blue) !important;
 }
-/* Topic-grid selected state: pale-blue border + background, NOT solid blue */
-.ow-topic-grid [data-testid="stButton-primary"] button {
+/* Interests screen: selected cards pale-blue (overrides solid-blue above) */
+html:has(.ow-interests-screen) [data-testid="stButton-primary"] button {
   background: #EEF4FF !important; border: 2px solid #3B5FEF !important;
   color: #172554 !important; box-shadow: none !important;
 }
-.ow-topic-grid [data-testid="stButton-primary"] button:hover {
+html:has(.ow-interests-screen) [data-testid="stButton-primary"] button:hover {
   background: #E0EAFF !important;
 }
 /* Skip link in onboarding header */
@@ -1730,6 +1730,7 @@ if st.session_state.screen == "role_select":
 if st.session_state.screen == "interests":
     _, ob_col, _ = st.columns([1, 3, 1])
     with ob_col:
+        st.markdown('<div class="ow-interests-screen" style="display:none"></div>', unsafe_allow_html=True)
         st.markdown(f'''<div class="ow-ob-header">
           <div style="display:flex;align-items:center;gap:8px">{LOGO_TAG}<span style="font-weight:700;font-size:0.95rem;color:#172554">Owlume</span></div>
           <div style="display:flex;align-items:center;gap:12px">
@@ -1770,7 +1771,6 @@ if st.session_state.screen == "interests":
         if visible:
             cols_per_row = 4
             rows = [visible[i:i+cols_per_row] for i in range(0, len(visible), cols_per_row)]
-            st.markdown('<div class="ow-topic-grid">', unsafe_allow_html=True)
             for row in rows:
                 cols = st.columns(len(row))
                 for ci, name in enumerate(row):
@@ -1784,7 +1784,6 @@ if st.session_state.screen == "interests":
                             if is_sel: st.session_state.selected_topics.remove(name)
                             else: st.session_state.selected_topics.append(name)
                             st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # Show More / Show Less
         if not topic_q.strip():
