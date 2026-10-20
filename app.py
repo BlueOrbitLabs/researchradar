@@ -1604,24 +1604,23 @@ if st.session_state.screen == "welcome":
 # SCREEN: ROLE SELECTION  (Step 1 of 4)
 # ═══════════════════════════════════════════════════════════
 if st.session_state.screen == "role_select":
-    # ── Handle all interactions via query params ──────────────────────────────
+    # ── Hidden sidebar trigger buttons (JS clicks these; display:none keeps layout clean) ──
     _ROLE_IDS = {
         "student", "competitive_exam", "faculty", "phd_researcher",
         "working_professional", "curious_learner", "other", "prefer_not_to_say",
     }
-    _qp = st.query_params
-    if "ow_role" in _qp:
-        _v = _qp.get("ow_role", "")
-        if _v in _ROLE_IDS:
-            st.session_state.user_role = _v
-        st.query_params.clear()
-        st.rerun()
-    if "ow_skip" in _qp or "ow_next" in _qp:
-        st.query_params.clear()
-        st.session_state.screen = "interests"; st.rerun()
-    if "ow_back" in _qp:
-        st.query_params.clear()
-        st.session_state.screen = "welcome"; st.rerun()
+    with st.sidebar:
+        for _rid in ["student","competitive_exam","faculty","phd_researcher",
+                     "working_professional","curious_learner","other","prefer_not_to_say"]:
+            if st.button(f"__ow_role_{_rid}__", key=f"_sbtrig_{_rid}"):
+                st.session_state.user_role = _rid
+                st.rerun()
+        if st.button("__ow_back__",  key="_sbtrig_back"):
+            st.session_state.screen = "welcome";   st.rerun()
+        if st.button("__ow_skip__",  key="_sbtrig_skip"):
+            st.session_state.screen = "interests"; st.rerun()
+        if st.button("__ow_next__",  key="_sbtrig_next"):
+            st.session_state.screen = "interests"; st.rerun()
 
     cur_role = st.session_state.get("user_role", None)
 
@@ -1632,12 +1631,10 @@ if st.session_state.screen == "role_select":
         ("phd_researcher",       "🔬", "PhD scholar / Researcher",   "Academic research"),
         ("working_professional", "💼", "Working professional",       "Industry, government or other roles"),
         ("curious_learner",      "💡", "Curious learner",            "I explore many fields"),
-        ("other",                "❓", "Other",                      "Tell us more"),
+        ("other",                "❓",     "Other",                      "Tell us more"),
         ("prefer_not_to_say",    "🤫", "Prefer not to say",          "No additional information needed"),
     ]
 
-    # Build card HTML — each card is a single <a> link, so icon+title+desc
-    # are always one unified clickable unit.
     cards_html = ""
     for role_id, icon, title, desc in ROLES:
         is_sel   = cur_role == role_id
@@ -1650,42 +1647,37 @@ if st.session_state.screen == "role_select":
                     f'margin-top:3px;line-height:1.4;">{desc}</div>'
                     if desc else "")
         cards_html += (
-            f'<a href="?ow_role={role_id}" style="text-decoration:none;display:block;">' +
-            f'<div style="position:relative;display:flex;align-items:center;gap:14px;padding:14px 16px;border:1.5px solid {border};background:{bg};border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;min-height:76px;box-sizing:border-box;">' +
+            f'<div onclick="owTrig(\'__ow_role_{role_id}__\')" style="cursor:pointer;display:block;">' +
+            f'<div style="position:relative;display:flex;align-items:center;gap:14px;padding:14px 16px;border:1.5px solid {border};background:{bg};border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);min-height:76px;box-sizing:border-box;">' +
             chk +
             f'<span style="font-size:1.55rem;flex-shrink:0;line-height:1;">{icon}</span>' +
             f'<div style="text-align:left;min-width:0;">' +
             f'<div style="font-weight:700;color:#172554;font-size:0.9rem;line-height:1.3;word-break:break-word;">{title}</div>' +
             desc_row +
-            '</div></div></a>'
+            '</div></div></div>'
         )
-
-    # Ninth placeholder so the 8-card grid doesn't stretch the last two cards
     cards_html += '<div style="visibility:hidden;pointer-events:none;"></div>'
 
     st.markdown(f"""
+<script>
+function owTrig(label){{
+  var sb=document.querySelector('[data-testid="stSidebar"]');
+  var pool=sb?sb.querySelectorAll('button'):document.querySelectorAll('button');
+  for(var i=0;i<pool.length;i++){{
+    if(pool[i].textContent.trim()===label){{pool[i].click();return;}}
+  }}
+}}
+</script>
 <style>
-/* hover glow for unselected cards */
-.ow-rs a:hover > div {{
-  border-color: #93B4FF !important;
-  background:   #F5F8FF !important;
-}}
-/* kill Streamlit's default link colour inside the grid */
-.ow-rs a, .ow-rs a:visited {{ color: inherit; }}
-/* mobile: collapse to 1 column */
-@media (max-width: 600px) {{
-  .ow-rs-grid {{ grid-template-columns: 1fr !important; }}
-}}
+[data-testid="stSidebar"]{{display:none!important;}}
+.ow-rs div[onclick]:hover > div{{border-color:#93B4FF!important;background:#F5F8FF!important;}}
+@media(max-width:600px){{.ow-rs-grid{{grid-template-columns:1fr!important;}}}}
 </style>
 
 <div class="ow-rs" style="max-width:860px;margin:0 auto;padding:0 8px;">
-
-  <!-- ── Header ─────────────────────────────────────────── -->
-  <div style="display:flex;align-items:center;justify-content:space-between;
-              padding:20px 0 26px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 0 26px;">
     <div style="display:flex;align-items:center;gap:10px;">
-      <img src="data:image/png;base64,{LOGO_B64}"
-           style="height:48px;object-fit:contain;" alt="Owlume">
+      <img src="data:image/png;base64,{LOGO_B64}" style="height:48px;object-fit:contain;" alt="Owlume">
       <span style="font-size:1.5rem;font-weight:800;color:#172554;letter-spacing:-0.02em;">Owlume</span>
     </div>
     <div style="display:flex;align-items:center;gap:14px;">
@@ -1698,43 +1690,30 @@ if st.session_state.screen == "role_select":
           <div style="width:20px;height:5px;border-radius:3px;background:#E2E8F0;"></div>
         </div>
       </div>
-      <a href="?ow_skip=1"
-         style="font-size:0.83rem;color:#64748B;text-decoration:none;font-weight:500;
-                padding:5px 14px;border:1.5px solid #E2E8F0;border-radius:20px;
-                background:#fff;">Skip</a>
+      <span onclick="owTrig('__ow_skip__')"
+            style="font-size:0.83rem;color:#64748B;font-weight:500;padding:5px 14px;
+                   border:1.5px solid #E2E8F0;border-radius:20px;background:#fff;cursor:pointer;">Skip</span>
     </div>
   </div>
-
-  <!-- ── Heading ────────────────────────────────────────── -->
-  <h2 style="font-size:1.5rem;font-weight:800;color:#172554;margin:0 0 6px;">
-    What best describes you?</h2>
-  <p style="color:#64748B;font-size:0.92rem;margin:0 0 20px;">
-    This helps us suggest useful content — you can explore anything and change this later.</p>
-
-  <!-- ── Card grid — 3 columns, 8 cards + 1 ghost ──────── -->
-  <div class="ow-rs-grid"
-       style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+  <h2 style="font-size:1.5rem;font-weight:800;color:#172554;margin:0 0 6px;">What best describes you?</h2>
+  <p style="color:#64748B;font-size:0.92rem;margin:0 0 20px;">This helps us suggest useful content — you can explore anything and change this later.</p>
+  <div class="ow-rs-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
 {cards_html}
   </div>
-
-  <!-- ── Navigation ────────────────────────────────────── -->
-  <div style="display:flex;justify-content:space-between;align-items:center;
-              padding:22px 0 24px;">
-    <a href="?ow_back=1"
-       style="display:inline-flex;align-items:center;gap:5px;
-              font-size:0.88rem;font-weight:600;color:#475569;text-decoration:none;
-              padding:9px 20px;border:1.5px solid #E2E8F0;border-radius:22px;
-              background:#fff;">← Back</a>
-    <a href="?ow_next=1"
-       style="display:inline-flex;align-items:center;gap:5px;
-              font-size:0.88rem;font-weight:600;color:#fff;text-decoration:none;
-              padding:9px 22px;border-radius:22px;background:#3B5FEF;">
-      Continue →</a>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 0 24px;">
+    <span onclick="owTrig('__ow_back__')"
+          style="display:inline-flex;align-items:center;gap:5px;font-size:0.88rem;font-weight:600;
+                 color:#475569;padding:9px 20px;border:1.5px solid #E2E8F0;border-radius:22px;
+                 background:#fff;cursor:pointer;">← Back</span>
+    <span onclick="owTrig('__ow_next__')"
+          style="display:inline-flex;align-items:center;gap:5px;font-size:0.88rem;font-weight:600;
+                 color:#fff;padding:9px 22px;border-radius:22px;background:#3B5FEF;cursor:pointer;">
+      Continue →</span>
   </div>
-
 </div>
 """, unsafe_allow_html=True)
     st.stop()
+
 
 # ═══════════════════════════════════════════════════════════
 # SCREEN: INTEREST SELECTION
