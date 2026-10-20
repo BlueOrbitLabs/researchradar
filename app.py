@@ -143,7 +143,7 @@ FEATURED_TOPICS = [
     "Finance & Markets","Policy & Government","Climate & Environment",
     "Business & Industry","Education","Social Sciences",
     "Arts & Culture","World Affairs","Careers",
-    "Local News & Community",
+    # "Local News & Community" removed — handled separately in Step 4
 ]
 
 # Short descriptions shown on interest cards
@@ -1188,13 +1188,13 @@ html:has(.ow-ob-h2) [data-testid="stButton-primary"] button {
 html:has(.ow-ob-h2) [data-testid="stButton-primary"] button:hover {
   background: var(--hover-blue) !important; border-color: var(--hover-blue) !important;
 }
-/* Interests screen: selected cards pale-blue (overrides solid-blue above) */
-html:has(.ow-interests-screen) [data-testid="stButton-primary"] button {
-  background: #EEF4FF !important; border: 2px solid #3B5FEF !important;
-  color: #172554 !important; box-shadow: none !important;
+/* Selection screens (interests + discover_prefs): vivid highlight */
+html:has(.ow-selection-screen) [data-testid="stButton-primary"] button {
+  background: #1D4ED8 !important; border: 2px solid #1D4ED8 !important;
+  color: #ffffff !important; box-shadow: 0 2px 8px rgba(29,78,216,0.35) !important;
 }
-html:has(.ow-interests-screen) [data-testid="stButton-primary"] button:hover {
-  background: #E0EAFF !important;
+html:has(.ow-selection-screen) [data-testid="stButton-primary"] button:hover {
+  background: #1E40AF !important; border-color: #1E40AF !important;
 }
 /* Skip link in onboarding header */
 .ow-skip-link { padding:6px 16px; border:1.5px solid #CBD5E1; border-radius:20px;
@@ -1730,7 +1730,7 @@ if st.session_state.screen == "role_select":
 if st.session_state.screen == "interests":
     _, ob_col, _ = st.columns([1, 3, 1])
     with ob_col:
-        st.markdown('<div class="ow-interests-screen" style="display:none"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="ow-selection-screen" style="display:none"></div>', unsafe_allow_html=True)
         st.markdown(f'''<div class="ow-ob-header">
           <div style="display:flex;align-items:center;gap:8px">{LOGO_TAG}<span style="font-weight:700;font-size:0.95rem;color:#172554">Owlume</span></div>
           <div style="display:flex;align-items:center;gap:12px">
@@ -1756,10 +1756,10 @@ if st.session_state.screen == "interests":
 
         # Determine visible topics
         if topic_q.strip():
-            visible = search_topics(topic_q)
+            visible = [t for t in search_topics(topic_q) if t != "Local News & Community"]
             st.markdown('<div class="ow-section-label">Search results</div>', unsafe_allow_html=True)
         elif st.session_state.show_all_topics:
-            visible = list(TOPIC_CATALOGUE.keys())
+            visible = [t for t in TOPIC_CATALOGUE.keys() if t != "Local News & Community"]
             st.markdown('<div class="ow-section-label">All interests</div>', unsafe_allow_html=True)
         else:
             visible = FEATURED_TOPICS
@@ -1820,30 +1820,6 @@ if st.session_state.screen == "interests":
                                 st.session_state.subtopics[_stn] = _cursubs
                                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-
-        # ── Local News — separate visual section ──
-        if "Local News & Community" in sel:
-            st.markdown('<div class="ow-local-section"><div class="ow-local-section-h">📍 Local News & Community</div></div>', unsafe_allow_html=True)
-            already_set = bool(st.session_state.local_city)
-            if already_set:
-                lce1, lce2 = st.columns([4, 1])
-                new_city = lce1.text_input("City", value=st.session_state.local_city,
-                                           key="onboard_city_change", label_visibility="collapsed")
-                if lce2.button("Update", key="update_city_ob"):
-                    st.session_state.local_city = new_city.strip()
-                    st.session_state.local_source_catalogue = {}
-                    st.session_state.local_sources_city = ""
-                    st.rerun()
-            else:
-                lca1, lca2 = st.columns([4, 1])
-                entered_city = lca1.text_input("Your city or region", key="onboard_city_input",
-                                               placeholder="e.g. Hyderabad, Pune, Bengaluru…",
-                                               label_visibility="collapsed")
-                if lca2.button("Set →", key="set_city_ob", type="primary"):
-                    if entered_city.strip():
-                        st.session_state.local_city = entered_city.strip()
-                        st.session_state.local_source_catalogue = {}
-                        st.rerun()
 
         # ── Can't find your topic? — compact row ──
         st.markdown('<div class="ow-cant-find"><div class="ow-cant-find-h">Can\'t find your topic?</div><div class="ow-cant-find-sub">Type one or more topics separated by commas — we\'ll add them to your feed.</div></div>', unsafe_allow_html=True)
@@ -1943,6 +1919,7 @@ if st.session_state.screen == "discover_prefs":
             </div>
           </div>
         </div>''', unsafe_allow_html=True)
+        st.markdown('<div class="ow-selection-screen" style="display:none"></div>', unsafe_allow_html=True)
         st.markdown('<div class="ow-ob-h2">What would you like to discover?</div>', unsafe_allow_html=True)
         st.markdown('<div class="ow-ob-sub">Choose the kinds of updates you want. Select as many as you like.</div>', unsafe_allow_html=True)
 
@@ -2051,7 +2028,17 @@ if st.session_state.screen == "review":
 
         # Profile
         rv1, rv2 = st.columns([6, 1])
-        role_val = st.session_state.user_role or "Not specified"
+        _ROLE_LABELS = {
+            "student": "🎓 Student",
+            "competitive_exam": "📋 Competitive exam aspirant",
+            "faculty": "🏛️ Faculty / Educator",
+            "phd_researcher": "🔬 PhD scholar / Researcher",
+            "working_professional": "💼 Working professional",
+            "curious_learner": "💡 Curious learner",
+            "other": "❓ Other",
+            "prefer_not_to_say": "🤫 Prefer not to say",
+        }
+        role_val = _ROLE_LABELS.get(st.session_state.user_role, "Not specified")
         rv1.markdown(f'<div class="ow-review-row"><div class="ow-review-icon">👤</div><div><div class="ow-review-label">Your profile</div><div class="ow-review-value">{role_val}</div></div></div>', unsafe_allow_html=True)
         with rv2:
             if st.button("✏️ Edit", key="rev_role"):
