@@ -1096,6 +1096,23 @@ st.markdown("""
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
+/* ── Reduce rerun flash / screen blink ────────────────────────────────────
+   Streamlit re-renders the whole page on every st.rerun().
+   A short fade-in makes it look like an intentional transition.        ── */
+[data-testid="stMainBlockContainer"],
+[data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stVerticalBlock"] {
+  animation: owFadeIn 0.18s ease-out;
+}
+@keyframes owFadeIn {
+  from { opacity: 0.2; }
+  to   { opacity: 1;   }
+}
+/* Hide the spinning status widget in the bottom-right (adds visual noise) */
+[data-testid="stStatusWidget"]           { display: none !important; }
+[data-testid="stAppToolbar"]             { display: none !important; }
+[data-testid="stDecoration"]             { display: none !important; }
+
 :root {
   /* ── Owlume Design Tokens ── */
   --navy:       #1a1a6e;          /* brand navy — headings, sidebar brand */
