@@ -2053,13 +2053,16 @@ if st.session_state.screen == "local_setup":
 
         st.markdown("**Add your location (optional)**")
         st.markdown('<div style="font-size:0.84rem;color:var(--muted);margin-bottom:12px">You can skip this step and set it later. We do not use your precise device location.</div>', unsafe_allow_html=True)
-        lc1, lc2 = st.columns(2)
-        city_val = lc1.text_input("City or region", key="local_city_input",
-                                   placeholder="e.g. Hyderabad, Pune, Delhi...",
-                                   value=st.session_state.local_city)
-        region_val = lc2.text_input("State or region (optional)", key="local_region_input",
-                                     placeholder="e.g. Telangana, Maharashtra...",
-                                     value=st.session_state.local_region)
+        city_val = st.text_input("City or region", key="local_city_input",
+                                 placeholder="e.g. Hyderabad, or Hyderabad, Telangana...",
+                                 value=st.session_state.local_city)
+        # Allow "City, State/Region" in the single box; split automatically.
+        if "," in city_val:
+            _parts = [p.strip() for p in city_val.split(",", 1)]
+            city_val = _parts[0]
+            region_val = _parts[1] if len(_parts) > 1 else st.session_state.local_region
+        else:
+            region_val = st.session_state.local_region
         st.checkbox("Include nearby areas and regional updates", key="local_nearby_cb")
 
         st.markdown("<br>", unsafe_allow_html=True)
