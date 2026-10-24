@@ -184,6 +184,61 @@ TOPIC_DESCRIPTIONS = {
 # All topic names (for fuzzy matching)
 ALL_TOPIC_NAMES = list(TOPIC_CATALOGUE.keys())
 
+# ── Bundled India city → state/UT map (offline autocomplete, no external API) ──
+INDIA_CITY_STATE = [
+    ("Agartala","Tripura"),("Agra","Uttar Pradesh"),("Ahmedabad","Gujarat"),
+    ("Aizawl","Mizoram"),("Ajmer","Rajasthan"),("Aligarh","Uttar Pradesh"),
+    ("Allahabad","Uttar Pradesh"),("Amritsar","Punjab"),("Aurangabad","Maharashtra"),
+    ("Bengaluru","Karnataka"),("Bangalore","Karnataka"),("Bhopal","Madhya Pradesh"),
+    ("Bhubaneswar","Odisha"),("Bikaner","Rajasthan"),("Chandigarh","Chandigarh"),
+    ("Chennai","Tamil Nadu"),("Coimbatore","Tamil Nadu"),("Cuttack","Odisha"),
+    ("Dehradun","Uttarakhand"),("Delhi","Delhi"),("New Delhi","Delhi"),
+    ("Dhanbad","Jharkhand"),("Dibrugarh","Assam"),("Dimapur","Nagaland"),
+    ("Durgapur","West Bengal"),("Faridabad","Haryana"),("Gandhinagar","Gujarat"),
+    ("Gangtok","Sikkim"),("Ghaziabad","Uttar Pradesh"),("Goa","Goa"),
+    ("Panaji","Goa"),("Gorakhpur","Uttar Pradesh"),("Guntur","Andhra Pradesh"),
+    ("Gurgaon","Haryana"),("Gurugram","Haryana"),("Guwahati","Assam"),
+    ("Gwalior","Madhya Pradesh"),("Hubli","Karnataka"),("Hyderabad","Telangana"),
+    ("Imphal","Manipur"),("Indore","Madhya Pradesh"),("Itanagar","Arunachal Pradesh"),
+    ("Jabalpur","Madhya Pradesh"),("Jaipur","Rajasthan"),("Jalandhar","Punjab"),
+    ("Jammu","Jammu & Kashmir"),("Jamshedpur","Jharkhand"),("Jodhpur","Rajasthan"),
+    ("Kanpur","Uttar Pradesh"),("Kochi","Kerala"),("Co chin","Kerala"),
+    ("Kohima","Nagaland"),("Kolkata","West Bengal"),("Calcutta","West Bengal"),
+    ("Kota","Rajasthan"),("Kozhikode","Kerala"),("Lucknow","Uttar Pradesh"),
+    ("Ludhiana","Punjab"),("Madurai","Tamil Nadu"),("Mangalore","Karnataka"),
+    ("Mangaluru","Karnataka"),("Meerut","Uttar Pradesh"),("Moradabad","Uttar Pradesh"),
+    ("Mumbai","Maharashtra"),("Bombay","Maharashtra"),("Mysuru","Karnataka"),
+    ("Mysore","Karnataka"),("Nagpur","Maharashtra"),("Nashik","Maharashtra"),
+    ("Noida","Uttar Pradesh"),("Patna","Bihar"),("Pondicherry","Puducherry"),
+    ("Puducherry","Puducherry"),("Pune","Maharashtra"),("Raipur","Chhattisgarh"),
+    ("Rajkot","Gujarat"),("Ranchi","Jharkhand"),("Rourkela","Odisha"),
+    ("Salem","Tamil Nadu"),("Shillong","Meghalaya"),("Shimla","Himachal Pradesh"),
+    ("Siliguri","West Bengal"),("Srinagar","Jammu & Kashmir"),("Surat","Gujarat"),
+    ("Thane","Maharashtra"),("Thiruvananthapuram","Kerala"),("Trivandrum","Kerala"),
+    ("Tiruchirappalli","Tamil Nadu"),("Trichy","Tamil Nadu"),("Udaipur","Rajasthan"),
+    ("Vadodara","Gujarat"),("Baroda","Gujarat"),("Varanasi","Uttar Pradesh"),
+    ("Vijayawada","Andhra Pradesh"),("Visakhapatnam","Andhra Pradesh"),("Vizag","Andhra Pradesh"),
+    ("Warangal","Telangana"),("Bareilly","Uttar Pradesh"),("Bhavnagar","Gujarat"),
+    ("Bokaro","Jharkhand"),("Darjeeling","West Bengal"),("Davangere","Karnataka"),
+    ("Dewas","Madhya Pradesh"),("Dharamshala","Himachal Pradesh"),("Dharwad","Karnataka"),
+    ("Erode","Tamil Nadu"),("Gaya","Bihar"),("Gulbarga","Karnataka"),
+    ("Kalaburagi","Karnataka"),("Haldwani","Uttarakhand"),("Haridwar","Uttarakhand"),
+    ("Hisar","Haryana"),("Hosur","Tamil Nadu"),("Hubballi","Karnataka"),
+    ("Jabalpur","Madhya Pradesh"),("Jhansi","Uttar Pradesh"),("Junagadh","Gujarat"),
+    ("Karnal","Haryana"),("Kolhapur","Maharashtra"),("Kollam","Kerala"),
+    ("Kota","Rajasthan"),("Latur","Maharashtra"),("Loni","Uttar Pradesh"),
+    ("Mathura","Uttar Pradesh"),("Muzaffarpur","Bihar"),("Muzaffarnagar","Uttar Pradesh"),
+    ("Nagapattinam","Tamil Nadu"),("Nagercoil","Tamil Nadu"),("Nanded","Maharashtra"),
+    ("Nellore","Andhra Pradesh"),("Panipat","Haryana"),("Patiala","Punjab"),
+    ("Pudukkottai","Tamil Nadu"),("Rohtak","Haryana"),("Saharanpur","Uttar Pradesh"),
+    ("Sangli","Maharashtra"),("Satara","Maharashtra"),("Shimoga","Karnataka"),
+    ("Shivamogga","Karnataka"),("Solapur","Maharashtra"),("Sonipat","Haryana"),
+    ("Thanjavur","Tamil Nadu"),("Tirunelveli","Tamil Nadu"),("Tirupati","Andhra Pradesh"),
+    ("Tumkur","Karnataka"),("Tumakuru","Karnataka"),("Ujjain","Madhya Pradesh"),
+    ("Vellore","Tamil Nadu"),("Vijayapura","Karnataka"),("Bijapur","Karnataka"),
+]
+INDIA_CITY_TO_STATE = {c: s for c, s in INDIA_CITY_STATE}
+
 def fuzzy_match_topic(query):
     """Return closest matching topic name, or None."""
     q = query.strip().lower()
@@ -1065,6 +1120,9 @@ DEFAULTS = {
     "topic_search": "",
     "show_all_topics": False,
     "main_tab": "feed",           # feed | discover | saved | ask
+    "feed_strategy": "for_you",   # for_you | my_fields | emerging | broaden
+    "feed_pool": None,           # cached combined candidate pool
+    "feed_pool_key": None,       # invalidation key for pool
     "right_panel": "none",
     "selected_article": None,
     "ai_result": None,
@@ -1570,6 +1628,127 @@ def topic_icon(name):
 def all_topics_for_user():
     return st.session_state.selected_topics + st.session_state.custom_topics
 
+# ── Feed strategy ranking helpers ─────────────────────────────────────────
+def _freshness_score(art):
+    """Best-effort freshness in [0,1] from a date string; unknown -> 0.3."""
+    d = (art.get("date") or "").strip()
+    if not d:
+        return 0.3
+    # Try common formats
+    for fmt in ("%Y-%m-%d", "%d %b %Y", "%b %d, %Y", "%Y"):
+        try:
+            dt = datetime.strptime(d[:len(fmt)+2], fmt) if False else None
+        except Exception:
+            pass
+    # Simpler: look for a 4-digit year
+    import re as _re
+    m = _re.search(r"(20\d{2})", d)
+    if m:
+        yr = int(m.group(1))
+        # Map 2020..2026 to 0.2..1.0
+        return min(1.0, max(0.2, (yr - 2019) / 7.0))
+    return 0.3
+
+def _source_quality(art):
+    src = (art.get("source") or "").lower()
+    # Lightweight heuristic: known academic/gov sources score higher
+    high = ["openalex", "crossref", "pubmed", "europe pmc", "arxiv", "doaj", ".gov", ".edu", "who", "nih", "nature", "science"]
+    if any(h in src for h in high):
+        return 0.8
+    return 0.5
+
+def _rank_for_you(pool, topics, subtopics):
+    """Combine relevance + freshness + source quality + modest diversity."""
+    seen_topics = set()
+    seen_sources = set()
+    scored = []
+    for a in pool:
+        rel = a.get("relevance", 0.3)
+        fr = _freshness_score(a)
+        sq = _source_quality(a)
+        topic = a.get("topic", "")
+        # diversity penalty if topic/source already used
+        div = 1.0
+        if topic in seen_topics:
+            div *= 0.85
+        if a.get("source") in seen_sources:
+            div *= 0.9
+        score = (0.45 * rel + 0.25 * fr + 0.2 * sq) * div
+        scored.append((score, a))
+    scored.sort(key=lambda x: -x[0])
+    # cap per publisher (max 3) and per topic (max 4) for diversity
+    out, pub_counts, topic_counts = [], {}, {}
+    for score, a in scored:
+        pub = a.get("source", "")
+        tp = a.get("topic", "")
+        if pub_counts.get(pub, 0) >= 3:
+            continue
+        if topic_counts.get(tp, 0) >= 4:
+            continue
+        out.append(a)
+        pub_counts[pub] = pub_counts.get(pub, 0) + 1
+        topic_counts[tp] = topic_counts.get(tp, 0) + 1
+        if len(out) >= 25:
+            break
+    return out
+
+def _rank_my_fields(pool, topics, subtopics, filter_topic=None):
+    """Prioritise explicit interests/subtopics; support per-interest filter."""
+    cand = pool
+    if filter_topic and filter_topic != "All":
+        cand = [a for a in pool if a.get("topic") == filter_topic]
+    # score by relevance (interest match) + subtopic match + freshness
+    def _s(a):
+        rel = a.get("relevance", 0.3)
+        fr = _freshness_score(a)
+        sub_bonus = 0.0
+        subs = subtopics.get(a.get("topic"), []) or []
+        if subs and any(s.lower() in (a.get("title","")+a.get("summary","")).lower() for s in subs):
+            sub_bonus = 0.15
+        return rel + 0.2 * fr + sub_bonus
+    cand = sorted(cand, key=lambda a: -_s(a))
+    # diversity: max 4 per topic
+    out, tc = [], {}
+    for a in cand:
+        tp = a.get("topic", "")
+        if tc.get(tp, 0) >= 4:
+            continue
+        out.append(a)
+        tc[tp] = tc.get(tp, 0) + 1
+        if len(out) >= 25:
+            break
+    return out
+
+def _rank_emerging(pool, topics, subtopics):
+    """Prioritise recent developments. Honest: label as recent developments."""
+    # Score: freshness heavy + source quality + relevance (lighter)
+    def _s(a):
+        fr = _freshness_score(a)
+        sq = _source_quality(a)
+        rel = a.get("relevance", 0.3)
+        return 0.5 * fr + 0.3 * sq + 0.2 * rel
+    cand = sorted(pool, key=lambda a: -_s(a))
+    # dedup already done; keep top 25
+    return cand[:25]
+
+def _rank_broaden(pool, topics, subtopics):
+    """Surface content outside the user's main interests."""
+    user_topics = set(topics)
+    # Prefer articles whose topic is NOT in user topics; if none, use all but down-rank user topics
+    outside = [a for a in pool if a.get("topic") not in user_topics]
+    inside = [a for a in pool if a.get("topic") in user_topics]
+    # rank outside by freshness + source quality
+    def _s(a):
+        return 0.5 * _freshness_score(a) + 0.3 * _source_quality(a) + 0.2 * a.get("relevance", 0.3)
+    outside = sorted(outside, key=lambda a: -_s(a))
+    inside = sorted(inside, key=lambda a: -_s(a))
+    # Mix: mostly outside, with a few inside for context
+    out = outside[:20]
+    # add a couple from inside only if outside is thin
+    if len(out) < 15:
+        out.extend(inside[: (15 - len(out))])
+    return out[:25]
+
 def check_ai_available():
     try: OpenAI(api_key=OPENAI_KEY); return True, ""
     except: return False, "OpenAI key not configured"
@@ -2057,19 +2236,62 @@ if st.session_state.screen == "local_setup":
 
         st.markdown("**Add your location (optional)**")
         st.markdown('<div style="font-size:0.84rem;color:var(--muted);margin-bottom:12px">You can skip this step and set it later. We do not use your precise device location.</div>', unsafe_allow_html=True)
+        # Initialise widget state from persisted values (once per session).
+        if "local_city_input" not in st.session_state:
+            st.session_state.local_city_input = st.session_state.local_city
+        if "local_region_input" not in st.session_state:
+            st.session_state.local_region_input = st.session_state.local_region
+
         city_val = st.text_input("City or region", key="local_city_input",
                                  placeholder="e.g. Mumbai, Maharashtra",
                                  value=st.session_state.local_city)
-        # Hint shown only before the user types; vanishes once a value is entered.
-        if not (city_val or "").strip():
-            st.caption("💡 Type your city and state separated by a comma — e.g. 'Mumbai, Maharashtra'.")
-        # Allow "City, State/Region" in the single box; split automatically.
-        if "," in city_val:
+
+        # Type-ahead suggestions from the bundled India city dataset (fuzzy + prefix).
+        _q = (city_val or "").strip().lower()
+        _sugs = []
+        if len(_q) >= 2:
+            _starts = [(c, s) for c, s in INDIA_CITY_STATE if c.lower().startswith(_q)]
+            _contains = [(c, s) for c, s in INDIA_CITY_STATE if _q in c.lower() and not c.lower().startswith(_q)]
+            _sugs = (_starts + _contains)[:8]
+            # Fuzzy fallback for partial/misspelled input (e.g. 'hydr' -> 'Hyderabad').
+            if not _sugs:
+                import difflib as _dl
+                _names = [c for c, _ in INDIA_CITY_STATE]
+                _matches = _dl.get_close_matches(_q, [n.lower() for n in _names], n=8, cutoff=0.45)
+                _seen = set()
+                for _m in _matches:
+                    for c, s in INDIA_CITY_STATE:
+                        if c.lower() == _m and c not in _seen:
+                            _sugs.append((c, s)); _seen.add(c)
+                            if len(_sugs) >= 8: break
+
+        # Show suggestions as a picker (only when matches exist) — auto-fills state on pick.
+        if _sugs:
+            _sug_labels = [f"{c}, {s}" for c, s in _sugs]
+            _pick = st.selectbox("Suggestions (select to auto-fill city & state)",
+                                 ["-- keep typed --"] + _sug_labels,
+                                 key="city_suggest_sel", index=0)
+            if _pick and _pick != "-- keep typed --":
+                _pc, _ps = _pick.split(",", 1)
+                st.session_state.local_city_input = _pc.strip()
+                st.session_state.local_region_input = _ps.strip()
+                st.session_state.city_suggest_sel = "-- keep typed --"
+                st.rerun()
+
+        # State/region field — auto-filled from a suggestion, editable otherwise.
+        region_val = st.text_input("State / Region (optional)", key="local_region_input",
+                                   placeholder="e.g. Maharashtra")
+
+        # Allow "City, State/Region" typed manually in the city box; split automatically.
+        if "," in (city_val or ""):
             _parts = [p.strip() for p in city_val.split(",", 1)]
             city_val = _parts[0]
-            region_val = _parts[1] if len(_parts) > 1 else st.session_state.local_region
-        else:
-            region_val = st.session_state.local_region
+            region_val = _parts[1] if len(_parts) > 1 else region_val
+
+        # Hint shown only before the user types; vanishes once a value is entered.
+        if not (city_val or "").strip() and not (region_val or "").strip():
+            st.caption("💡 Type your city, or 'City, State' — e.g. 'Mumbai, Maharashtra'. Suggestions appear as you type.")
+
         st.checkbox("Include nearby areas and regional updates", key="local_nearby_cb")
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -2255,13 +2477,40 @@ if not st.session_state.active_topic or st.session_state.active_topic not in all
 active = st.session_state.active_topic
 subtopics_for_active = st.session_state.subtopics.get(active, [])
 
-# Load articles for active topic (universal pipeline — works for any field)
-with st.spinner(f"Discovering {active} sources…"):
-    articles = load_topic_articles(active, subtopics_for_active or None)
-    RELEVANCE_THRESHOLD = 0.10
-    domain_articles = [a for a in articles if a.get("relevance", 0) >= RELEVANCE_THRESHOLD]
-    if len(domain_articles) < 5:
-        domain_articles = articles[:20]
+# Build a cached candidate pool from ALL of the user's interests (bounded).
+RELEVANCE_THRESHOLD = 0.10
+_pool_topics = [t for t in all_t if t != "Local News & Community"][:6]
+_pool_subtopics = {t: st.session_state.subtopics.get(t) for t in _pool_topics}
+_pool_key = (tuple(_pool_topics), tuple(sorted((k, tuple(v or [])) for k, v in _pool_subtopics.items())))
+if st.session_state.get("feed_pool_key") != _pool_key or not st.session_state.get("feed_pool"):
+    with st.spinner("Discovering articles across your interests…"):
+        _pool = []
+        for _tp in _pool_topics:
+            try:
+                _arts = load_topic_articles(_tp, _pool_subtopics.get(_tp) or None)
+                for _a in _arts:
+                    _a.setdefault("topic", _tp)
+                _pool.extend(_arts)
+            except Exception:
+                pass
+        # Also pull Local News if configured
+        if "Local News & Community" in all_t and st.session_state.get("local_city"):
+            try:
+                _local = load_local_articles(st.session_state.local_city, st.session_state.local_region, tuple(all_t))
+                for _a in _local:
+                    _a.setdefault("topic", "Local News & Community")
+                _pool.extend(_local)
+            except Exception:
+                pass
+        _pool = deduplicate_articles(_pool)
+        st.session_state.feed_pool = _pool
+        st.session_state.feed_pool_key = _pool_key
+feed_pool = st.session_state.feed_pool or []
+# Back-compat alias used by existing tabs/search
+articles = feed_pool
+domain_articles = [a for a in feed_pool if a.get("relevance", 0) >= RELEVANCE_THRESHOLD]
+if len(domain_articles) < 5:
+    domain_articles = feed_pool[:20]
 
 # ── 2-column layout: sidebar + main ──
 sidebar_col, main_col = st.columns([1.2, 4.5], gap="small")
@@ -2794,25 +3043,26 @@ with main_col:
       {briefing_items_html}
     </div>''', unsafe_allow_html=True)
 
-    # Topic tabs
-    tab_topics = all_t[:5]
-    tab_labels = ["Latest for you"] + [f"{topic_icon(t)} {t[:14]}" for t in tab_topics]
-    tab_keys = ["all"] + tab_topics
-
-    tab_objs = st.tabs(tab_labels)
-    for ti, tab in enumerate(tab_objs):
+    # Feed strategy tabs
+    _strategy_labels = ["✨ For You", "🎯 My Fields", "📈 Emerging", "🌍 Broaden"]
+    _strategy_keys = ["for_you", "my_fields", "emerging", "broaden"]
+    _strategy_objs = st.tabs(_strategy_labels)
+    for ti, tab in enumerate(_strategy_objs):
       with tab:
-        if ti == 0:
-            tab_arts = domain_articles
+        _strat = _strategy_keys[ti]
+        if _strat == "for_you":
+            tab_arts = _rank_for_you(feed_pool, all_t, st.session_state.subtopics)
+        elif _strat == "my_fields":
+            # Optional per-interest filter
+            _filter_opts = ["All"] + [t for t in all_t if t != "Local News & Community"]
+            _sel_filter = st.selectbox("Filter by interest", _filter_opts, key="myfields_filter", label_visibility="collapsed")
+            tab_arts = _rank_my_fields(feed_pool, all_t, st.session_state.subtopics,
+                                      filter_topic=_sel_filter if _sel_filter != "All" else None)
+        elif _strat == "emerging":
+            tab_arts = _rank_emerging(feed_pool, all_t, st.session_state.subtopics)
+            st.caption("Showing recent developments across your interests and beyond. Labelled as emerging signals, not confirmed trends.")
         else:
-            tab_topic = tab_keys[ti]
-            if tab_topic == active:
-                tab_arts = domain_articles
-            else:
-                raw = load_topic_articles(tab_topic, st.session_state.subtopics.get(tab_topic))
-                tab_arts = [a for a in raw if a.get("relevance", 0) >= RELEVANCE_THRESHOLD]
-                if len(tab_arts) < 5:
-                    tab_arts = raw[:20]
+            tab_arts = _rank_broaden(feed_pool, all_t, st.session_state.subtopics)
 
         # Apply the active search filter to the list this tab renders
         if search.strip():
@@ -2824,7 +3074,7 @@ with main_col:
             st.markdown(f"""
             <div style="text-align:center;padding:2rem;color:#666;">
               <div style="font-size:2.5rem">🔭</div>
-              <div style="font-weight:600;margin:0.5rem 0">No {tab_keys[ti] if ti > 0 else active} articles found yet</div>
+              <div style="font-weight:600;margin:0.5rem 0">No articles found for this feed yet</div>
               <div style="font-size:0.85rem">Try adding more subtopics in Settings, or check back soon as sources update.</div>
             </div>""", unsafe_allow_html=True)
             continue
