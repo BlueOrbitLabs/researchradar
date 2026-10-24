@@ -2275,22 +2275,25 @@ if st.session_state.screen == "local_setup":
                 _pc, _ps = _pick.split(",", 1)
                 st.session_state.local_city_input = _pc.strip()
                 st.session_state.local_region_input = _ps.strip()
+                st.session_state.local_city = _pc.strip()
+                st.session_state.local_region = _ps.strip()
                 st.session_state.city_suggest_sel = "-- keep typed --"
                 st.rerun()
 
-        # State/region field — auto-filled from a suggestion, editable otherwise.
-        region_val = st.text_input("State / Region (optional)", key="local_region_input",
-                                   placeholder="e.g. Maharashtra")
-
-        # Allow "City, State/Region" typed manually in the city box; split automatically.
+        # Allow "City, State/Region" typed manually in the single box; split automatically.
         if "," in (city_val or ""):
             _parts = [p.strip() for p in city_val.split(",", 1)]
             city_val = _parts[0]
-            region_val = _parts[1] if len(_parts) > 1 else region_val
+            region_val = _parts[1] if len(_parts) > 1 else st.session_state.local_region
+        else:
+            region_val = st.session_state.local_region
 
         # Hint shown only before the user types; vanishes once a value is entered.
         if not (city_val or "").strip() and not (region_val or "").strip():
             st.caption("💡 Type your city, or 'City, State' — e.g. 'Mumbai, Maharashtra'. Suggestions appear as you type.")
+        elif region_val and not (city_val or "").count(","):
+            # Show auto-filled state as info (editable via 'City, State' in the box above).
+            st.caption(f"✓ State/Region: {region_val}  (edit by typing 'City, State' above)")
 
         st.checkbox("Include nearby areas and regional updates", key="local_nearby_cb")
 
