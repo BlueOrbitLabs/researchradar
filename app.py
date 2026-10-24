@@ -1179,6 +1179,8 @@ if "ow_skip" in _nav or ("ow_next" in _nav):
     st.session_state.screen = "interests"; _nav_changed = True
 if "ow_skip2" in _nav:
     st.session_state.screen = "discover_prefs"; _nav_changed = True
+if "ow_loc" in _nav:
+    st.session_state.screen = "local_setup"; _nav_changed = True
 if "ow_back" in _nav:
     st.session_state.screen = "welcome"; _nav_changed = True
 if _nav_changed:
@@ -1222,7 +1224,7 @@ html, body, .stApp { background: #FAFBFD !important; }
   --info:       #3B82F6;
 }
 
-body, .stApp { background: var(--bg) !important; }
+body, .stApp { background: var(--bg) !important; color: var(--text) !important; }
 
 /* ── Landing page — two-column hero ── */
 html:has(.ow-screen-welcome) .stApp,
@@ -2290,10 +2292,10 @@ if st.session_state.screen == "local_setup":
 
         # Hint shown only before the user types; vanishes once a value is entered.
         if not (city_val or "").strip() and not (region_val or "").strip():
-            st.markdown('<div style="font-size:0.8rem;color:#475569;margin:4px 0;">💡 Type your city, or \'City, State\' — e.g. \'Mumbai, Maharashtra\'. Suggestions appear as you type.</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:0.8rem;color:#475569 !important;margin:4px 0;">💡 Type your city, or \'City, State\' — e.g. \'Mumbai, Maharashtra\'. Suggestions appear as you type.</div>', unsafe_allow_html=True)
         elif region_val and not (city_val or "").count(","):
             # Show auto-filled state as info (editable via 'City, State' in the box above).
-            st.markdown(f'<div style="font-size:0.8rem;color:#16a34a;margin:4px 0;">✓ State/Region: {region_val}  (edit by typing \'City, State\' above)</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:0.8rem;color:#16a34a !important;margin:4px 0;">✓ State/Region: {region_val}  (edit by typing \'City, State\' above)</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         nav1, nav2, nav3 = st.columns([1, 2, 1])
