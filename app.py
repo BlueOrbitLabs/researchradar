@@ -2290,12 +2290,10 @@ if st.session_state.screen == "local_setup":
 
         # Hint shown only before the user types; vanishes once a value is entered.
         if not (city_val or "").strip() and not (region_val or "").strip():
-            st.caption("💡 Type your city, or 'City, State' — e.g. 'Mumbai, Maharashtra'. Suggestions appear as you type.")
+            st.markdown('<div style="font-size:0.8rem;color:#475569;margin:4px 0;">💡 Type your city, or \'City, State\' — e.g. \'Mumbai, Maharashtra\'. Suggestions appear as you type.</div>', unsafe_allow_html=True)
         elif region_val and not (city_val or "").count(","):
             # Show auto-filled state as info (editable via 'City, State' in the box above).
-            st.caption(f"✓ State/Region: {region_val}  (edit by typing 'City, State' above)")
-
-        st.checkbox("Include nearby areas and regional updates", key="local_nearby_cb")
+            st.markdown(f'<div style="font-size:0.8rem;color:#16a34a;margin:4px 0;">✓ State/Region: {region_val}  (edit by typing \'City, State\' above)</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         nav1, nav2, nav3 = st.columns([1, 2, 1])
