@@ -9,6 +9,9 @@ from supabase import create_client
 from PIL import Image as _PILImage
 import io as _io, base64 as _b64
 
+# Pure ranking logic (no Streamlit, no I/O) — see feed_strategy.py and tests/
+import feed_strategy as fs
+
 logger = logging.getLogger("owlume")
 
 def _get_secret(key: str) -> str:
@@ -1123,6 +1126,8 @@ DEFAULTS = {
     "feed_strategy": "for_you",   # for_you | my_fields | emerging | broaden
     "feed_pool": None,           # cached combined candidate pool
     "feed_pool_key": None,       # invalidation key for pool
+    "feed_pool_errors": [],      # per-topic retrieval failures (diagnostics)
+    "feed_discovery_topics": [], # outside-interest topics retrieved for Broaden
     "right_panel": "none",
     "selected_article": None,
     "ai_result": None,
@@ -1629,125 +1634,38 @@ def all_topics_for_user():
     return st.session_state.selected_topics + st.session_state.custom_topics
 
 # ── Feed strategy ranking helpers ─────────────────────────────────────────
-def _freshness_score(art):
-    """Best-effort freshness in [0,1] from a date string; unknown -> 0.3."""
-    d = (art.get("date") or "").strip()
-    if not d:
-        return 0.3
-    # Try common formats
-    for fmt in ("%Y-%m-%d", "%d %b %Y", "%b %d, %Y", "%Y"):
-        try:
-            dt = datetime.strptime(d[:len(fmt)+2], fmt) if False else None
-        except Exception:
-            pass
-    # Simpler: look for a 4-digit year
-    import re as _re
-    m = _re.search(r"(20\d{2})", d)
-    if m:
-        yr = int(m.group(1))
-        # Map 2020..2026 to 0.2..1.0
-        return min(1.0, max(0.2, (yr - 2019) / 7.0))
-    return 0.3
+# Every weight, cap and content-type rule lives in feed_strategy.CONFIG.
+# These wrappers only inject the user's saved onboarding values; the actual
+# selection/ranking logic is pure and unit-tested in tests/test_feed_strategy.py.
+def _user_preferences():
+    """Selected information preferences (never treated as interests)."""
+    return st.session_state.get("discover_preferences") or []
 
-def _source_quality(art):
-    src = (art.get("source") or "").lower()
-    # Lightweight heuristic: known academic/gov sources score higher
-    high = ["openalex", "crossref", "pubmed", "europe pmc", "arxiv", "doaj", ".gov", ".edu", "who", "nih", "nature", "science"]
-    if any(h in src for h in high):
-        return 0.8
-    return 0.5
+def _user_role():
+    """Onboarding profile — a soft ranking signal, never a filter."""
+    return st.session_state.get("user_role")
 
 def _rank_for_you(pool, topics, subtopics):
-    """Combine relevance + freshness + source quality + modest diversity."""
-    seen_topics = set()
-    seen_sources = set()
-    scored = []
-    for a in pool:
-        rel = a.get("relevance", 0.3)
-        fr = _freshness_score(a)
-        sq = _source_quality(a)
-        topic = a.get("topic", "")
-        # diversity penalty if topic/source already used
-        div = 1.0
-        if topic in seen_topics:
-            div *= 0.85
-        if a.get("source") in seen_sources:
-            div *= 0.9
-        score = (0.45 * rel + 0.25 * fr + 0.2 * sq) * div
-        scored.append((score, a))
-    scored.sort(key=lambda x: -x[0])
-    # cap per publisher (max 3) and per topic (max 4) for diversity
-    out, pub_counts, topic_counts = [], {}, {}
-    for score, a in scored:
-        pub = a.get("source", "")
-        tp = a.get("topic", "")
-        if pub_counts.get(pub, 0) >= 3:
-            continue
-        if topic_counts.get(tp, 0) >= 4:
-            continue
-        out.append(a)
-        pub_counts[pub] = pub_counts.get(pub, 0) + 1
-        topic_counts[tp] = topic_counts.get(tp, 0) + 1
-        if len(out) >= 25:
-            break
-    return out
+    return fs.rank_for_you(pool, topics, subtopics,
+                           preferences=_user_preferences(),
+                           role=_user_role())
 
 def _rank_my_fields(pool, topics, subtopics, filter_topic=None):
-    """Prioritise explicit interests/subtopics; support per-interest filter."""
-    cand = pool
-    if filter_topic and filter_topic != "All":
-        cand = [a for a in pool if a.get("topic") == filter_topic]
-    # score by relevance (interest match) + subtopic match + freshness
-    def _s(a):
-        rel = a.get("relevance", 0.3)
-        fr = _freshness_score(a)
-        sub_bonus = 0.0
-        subs = subtopics.get(a.get("topic"), []) or []
-        if subs and any(s.lower() in (a.get("title","")+a.get("summary","")).lower() for s in subs):
-            sub_bonus = 0.15
-        return rel + 0.2 * fr + sub_bonus
-    cand = sorted(cand, key=lambda a: -_s(a))
-    # diversity: max 4 per topic
-    out, tc = [], {}
-    for a in cand:
-        tp = a.get("topic", "")
-        if tc.get(tp, 0) >= 4:
-            continue
-        out.append(a)
-        tc[tp] = tc.get(tp, 0) + 1
-        if len(out) >= 25:
-            break
-    return out
+    return fs.rank_my_fields(pool, topics, subtopics,
+                             preferences=_user_preferences(),
+                             role=_user_role(),
+                             filter_topic=filter_topic)
 
 def _rank_emerging(pool, topics, subtopics):
-    """Prioritise recent developments. Honest: label as recent developments."""
-    # Score: freshness heavy + source quality + relevance (lighter)
-    def _s(a):
-        fr = _freshness_score(a)
-        sq = _source_quality(a)
-        rel = a.get("relevance", 0.3)
-        return 0.5 * fr + 0.3 * sq + 0.2 * rel
-    cand = sorted(pool, key=lambda a: -_s(a))
-    # dedup already done; keep top 25
-    return cand[:25]
+    return fs.rank_emerging(pool, topics, subtopics,
+                            preferences=_user_preferences(),
+                            role=_user_role())
 
 def _rank_broaden(pool, topics, subtopics):
-    """Surface content outside the user's main interests."""
-    user_topics = set(topics)
-    # Prefer articles whose topic is NOT in user topics; if none, use all but down-rank user topics
-    outside = [a for a in pool if a.get("topic") not in user_topics]
-    inside = [a for a in pool if a.get("topic") in user_topics]
-    # rank outside by freshness + source quality
-    def _s(a):
-        return 0.5 * _freshness_score(a) + 0.3 * _source_quality(a) + 0.2 * a.get("relevance", 0.3)
-    outside = sorted(outside, key=lambda a: -_s(a))
-    inside = sorted(inside, key=lambda a: -_s(a))
-    # Mix: mostly outside, with a few inside for context
-    out = outside[:20]
-    # add a couple from inside only if outside is thin
-    if len(out) < 15:
-        out.extend(inside[: (15 - len(out))])
-    return out[:25]
+    return fs.rank_broaden(pool, topics, subtopics,
+                           preferences=_user_preferences(),
+                           role=_user_role(),
+                           outside_topics=st.session_state.get("feed_discovery_topics") or [])
 
 def check_ai_available():
     try: OpenAI(api_key=OPENAI_KEY); return True, ""
@@ -2478,35 +2396,43 @@ if not st.session_state.active_topic or st.session_state.active_topic not in all
 active = st.session_state.active_topic
 subtopics_for_active = st.session_state.subtopics.get(active, [])
 
-# Build a cached candidate pool from ALL of the user's interests (bounded).
+# Build a cached candidate pool from the user's saved interests (bounded).
+# Local News is deliberately excluded: it has its own cached retrieval path in
+# the Local News tab and must never be mixed into the general feeds.
 RELEVANCE_THRESHOLD = 0.10
-_pool_topics = [t for t in all_t if t != "Local News & Community"][:6]
+_pool_topics = [t for t in all_t if t != "Local News & Community"][:fs.MAX_TOPICS_PER_REFRESH]
 _pool_subtopics = {t: st.session_state.subtopics.get(t) for t in _pool_topics}
-_pool_key = (tuple(_pool_topics), tuple(sorted((k, tuple(v or [])) for k, v in _pool_subtopics.items())))
-if st.session_state.get("feed_pool_key") != _pool_key or not st.session_state.get("feed_pool"):
+# Deterministic per-day rotation so discovery is stable during a session but
+# the outside fields on offer change over time.
+_discovery_topics = fs.choose_discovery_topics(
+    list(TOPIC_CATALOGUE.keys()),
+    _pool_topics,
+    seed=fs.stable_seed(datetime.now().strftime("%Y-%m-%d"),
+                        tuple(sorted(_pool_topics))),
+)
+_pool_key = (
+    tuple(_pool_topics),
+    tuple(sorted((k, tuple(v or [])) for k, v in _pool_subtopics.items())),
+    tuple(_discovery_topics),
+    tuple(st.session_state.get("discover_preferences") or []),
+)
+# `is None` (not falsy): an empty result is a real answer, so adapters are not
+# called again on every rerun. The Retry button clears this on demand.
+if st.session_state.get("feed_pool_key") != _pool_key or st.session_state.get("feed_pool") is None:
     with st.spinner("Discovering articles across your interests…"):
-        _pool = []
-        for _tp in _pool_topics:
-            try:
-                _arts = load_topic_articles(_tp, _pool_subtopics.get(_tp) or None)
-                for _a in _arts:
-                    _a.setdefault("topic", _tp)
-                _pool.extend(_arts)
-            except Exception:
-                pass
-        # Also pull Local News if configured
-        if "Local News & Community" in all_t and st.session_state.get("local_city"):
-            try:
-                _local = load_local_articles(st.session_state.local_city, st.session_state.local_region, tuple(all_t))
-                for _a in _local:
-                    _a.setdefault("topic", "Local News & Community")
-                _pool.extend(_local)
-            except Exception:
-                pass
-        _pool = deduplicate_articles(_pool)
-        st.session_state.feed_pool = _pool
-        st.session_state.feed_pool_key = _pool_key
-feed_pool = st.session_state.feed_pool or []
+        _pool, _pool_errors = fs.build_pool(
+            load_topic_articles, _pool_topics, _pool_subtopics,
+            discovery_topics=_discovery_topics,
+        )
+    st.session_state.feed_pool = _pool
+    st.session_state.feed_pool_key = _pool_key
+    st.session_state.feed_pool_errors = _pool_errors
+    st.session_state.feed_discovery_topics = list(_discovery_topics)
+
+feed_pool = st.session_state.get("feed_pool") or []
+feed_pool_errors = st.session_state.get("feed_pool_errors") or []
+feed_discovery_topics = st.session_state.get("feed_discovery_topics") or []
+
 # Back-compat alias used by existing tabs/search
 articles = feed_pool
 domain_articles = [a for a in feed_pool if a.get("relevance", 0) >= RELEVANCE_THRESHOLD]
@@ -3021,12 +2947,8 @@ with main_col:
                            placeholder="Search articles, topics or ask a question…",
                            label_visibility="collapsed")
 
-    # Filter by search — filter the collection that is actually rendered (domain_articles)
-    if search.strip():
-        sq = search.lower()
-        domain_articles = [a for a in domain_articles
-                            if sq in (a.get("title") or "").lower()
-                            or sq in (a.get("summary") or "").lower()]
+    # Search is applied per tab (see below) so it never rewrites a feed's
+    # candidate selection — it only filters the list that tab ranks.
 
     # Daily briefing card — top stories
     today = datetime.now().strftime("%a, %d %b %Y")
@@ -3044,47 +2966,93 @@ with main_col:
       {briefing_items_html}
     </div>''', unsafe_allow_html=True)
 
-    # Feed strategy tabs
+    # ── Retrieval health: honest partial / total failure states ──
+    _topic_attempts = len(_pool_topics) + len(feed_discovery_topics)
+    if feed_pool_errors:
+        if not feed_pool:
+            st.error(
+                "We couldn't reach any of the article sources just now. "
+                "Nothing has been substituted or invented — please retry in a moment."
+            )
+        else:
+            st.warning(
+                f"Some sources were unavailable ({len(feed_pool_errors)} of "
+                f"{_topic_attempts} topics). Showing everything that did load."
+            )
+        with st.expander("Retrieval details", expanded=False):
+            for _err in feed_pool_errors:
+                st.caption(f"• {_err.get('topic')}: {_err.get('error')}")
+        if st.button("🔄 Retry sources", key="retry_feed_sources"):
+            st.session_state.feed_pool = None
+            st.session_state.feed_pool_key = None
+            st.session_state.feed_pool_errors = []
+            st.rerun()
+
+    # Feed strategy tabs — each has its own candidate selection and ranking.
     _strategy_labels = ["✨ For You", "🎯 My Fields", "📈 Emerging", "🌍 Broaden"]
     _strategy_keys = ["for_you", "my_fields", "emerging", "broaden"]
     _strategy_objs = st.tabs(_strategy_labels)
     for ti, tab in enumerate(_strategy_objs):
       with tab:
         _strat = _strategy_keys[ti]
+
+        # Every tab derives its own list from the same bounded candidate pool.
         if _strat == "for_you":
             tab_arts = _rank_for_you(feed_pool, all_t, st.session_state.subtopics)
+            st.caption("Balanced mix of your strongest interests, your information "
+                       "preferences, recent developments, and a little discovery.")
         elif _strat == "my_fields":
-            # Optional per-interest filter
             _filter_opts = ["All"] + [t for t in all_t if t != "Local News & Community"]
-            _sel_filter = st.selectbox("Filter by interest", _filter_opts, key="myfields_filter", label_visibility="collapsed")
+            _sel_filter = st.selectbox("Filter by interest", _filter_opts,
+                                      key="myfields_filter", label_visibility="collapsed")
             tab_arts = _rank_my_fields(feed_pool, all_t, st.session_state.subtopics,
                                       filter_topic=_sel_filter if _sel_filter != "All" else None)
+            st.caption("Focused on your saved interests and subtopics; information "
+                       "preferences nudge which kinds of content rise to the top.")
         elif _strat == "emerging":
             tab_arts = _rank_emerging(feed_pool, all_t, st.session_state.subtopics)
-            st.caption("Showing recent developments across your interests and beyond. Labelled as emerging signals, not confirmed trends.")
+            st.caption("Recent, independently reported developments. These are emerging "
+                       "signals — not confirmed trends or popularity scores.")
         else:
             tab_arts = _rank_broaden(feed_pool, all_t, st.session_state.subtopics)
+            _disc_preview = ", ".join(feed_discovery_topics[:2])
+            st.caption("Quality material from fields beyond your saved interests"
+                       + (f" (this refresh: {_disc_preview})" if _disc_preview else "")
+                       + ". Discovery comes from the topic catalogue, not a fixed list.")
 
-        # Apply the active search filter to the list this tab renders
-        if search.strip():
-            tab_arts = [a for a in tab_arts
-                        if sq in (a.get("title") or "").lower()
-                        or sq in (a.get("summary") or "").lower()]
+        # Search filters this tab's ranked list without changing its strategy.
+        tab_arts = fs.search_articles(tab_arts, search)
 
         if not tab_arts:
+            _empty_reason = (
+                "No suitable content was returned by the available sources for this view."
+                if not feed_pool else
+                "Nothing in the current candidate pool matches this view or your search."
+            )
+            _empty_hint = {
+                "for_you": "Try adding another interest or subtopic, or retry the sources.",
+                "my_fields": "Try the All filter, add a subtopic, or retry the sources.",
+                "emerging": "Recent items may be thin right now — try another feed or retry.",
+                "broaden": "Discovery content may be sparse right now — try another feed or retry.",
+            }[_strat]
             st.markdown(f"""
             <div style="text-align:center;padding:2rem;color:#666;">
               <div style="font-size:2.5rem">🔭</div>
-              <div style="font-weight:600;margin:0.5rem 0">No articles found for this feed yet</div>
-              <div style="font-size:0.85rem">Try adding more subtopics in Settings, or check back soon as sources update.</div>
+              <div style="font-weight:600;margin:0.5rem 0">Nothing here yet</div>
+              <div style="font-size:0.85rem">{_empty_reason}<br>{_empty_hint}</div>
             </div>""", unsafe_allow_html=True)
+            if not feed_pool and not feed_pool_errors:
+                if st.button("🔄 Retry sources", key=f"retry_empty_{ti}"):
+                    st.session_state.feed_pool = None
+                    st.session_state.feed_pool_key = None
+                    st.rerun()
             continue
 
         high_rel = [a for a in tab_arts if a.get("relevance", 0) >= 0.4]
         if high_rel:
-            st.caption(f"📌 {len(high_rel)} highly relevant · {len(tab_arts)} total domain-matched articles")
+            st.caption(f"📌 {len(high_rel)} high-match · {len(tab_arts)} articles in this feed")
         else:
-            st.caption(f"🔍 {len(tab_arts)} articles discovered for this domain")
+            st.caption(f"🔍 {len(tab_arts)} articles in this feed")
 
         for art_i, art in enumerate(tab_arts[:20]):
             rel = art.get("relevance", 0)
