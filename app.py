@@ -1499,6 +1499,13 @@ html:has(.ow-ob-h2) [data-testid="stExpander"] {
   background: #FFFFFF !important;
   margin-bottom: 4px !important;
 }
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary {
+  background: #FFFFFF !important;
+  color: #1F2937 !important;
+}
+html:has(.ow-ob-h2) [data-testid="stExpander"] summary:hover {
+  background: #F1F5F9 !important;
+}
 html:has(.ow-ob-h2) [data-testid="stExpander"] summary,
 html:has(.ow-ob-h2) [data-testid="stExpander"] summary p,
 html:has(.ow-ob-h2) [data-testid="stExpander"] summary > div > p,
