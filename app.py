@@ -1132,18 +1132,11 @@ st.markdown("""
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
-/* ── Reduce rerun flash / screen blink ────────────────────────────────────
-   Streamlit re-renders the whole page on every st.rerun().
-   A short fade-in makes it look like an intentional transition.        ── */
-[data-testid="stMainBlockContainer"],
-[data-testid="stVerticalBlockBorderWrapper"],
-[data-testid="stVerticalBlock"] {
-  animation: owFadeIn 0.18s ease-out;
-}
-@keyframes owFadeIn {
-  from { opacity: 0.2; }
-  to   { opacity: 1;   }
-}
+/* ── Prevent black screen flash on rerun ──────────────────────────────────
+   Streamlit re-renders the whole page on every st.rerun(). Keep a solid
+   page background at all times and avoid opacity fade-ins that read as a
+   black flash between screens.                                         ── */
+html, body, .stApp { background: #FAFBFD !important; }
 /* Hide the spinning status widget in the bottom-right (adds visual noise) */
 [data-testid="stStatusWidget"]           { display: none !important; }
 [data-testid="stAppToolbar"]             { display: none !important; }
