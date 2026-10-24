@@ -1179,8 +1179,6 @@ if "ow_skip" in _nav or ("ow_next" in _nav):
     st.session_state.screen = "interests"; _nav_changed = True
 if "ow_skip2" in _nav:
     st.session_state.screen = "discover_prefs"; _nav_changed = True
-if "ow_loc" in _nav:
-    st.session_state.screen = "local_setup"; _nav_changed = True
 if "ow_back" in _nav:
     st.session_state.screen = "welcome"; _nav_changed = True
 if _nav_changed:
@@ -1411,7 +1409,7 @@ html:has(.ow-selection-screen) button[kind="primary"]::after {
 /* Briefing card */
 .ow-briefing {
   background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
-  border-radius: 16px; padding: 20px 24px; margin-bottom: 20px; color: white;
+  border-radius: 16px; padding: 20px 24px; margin-bottom: 20px; color: white !important;
 }
 .ow-briefing-date { font-size: 0.8rem; opacity: 0.7; margin-bottom: 4px; }
 .ow-briefing-h { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
@@ -2755,7 +2753,7 @@ with main_col:
           <div class="ow-briefing-date">{today_long}</div>
           <div class="ow-briefing-h">📰 Today's Top Stories</div>
           <div class="ow-briefing-sub" style="margin-bottom:10px">{len(top_arts)} articles from {src_count} sources</div>
-          {"".join([f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.92);text-decoration:underline">{a["title"][:95]}</a></div>' for a in top_arts[:5]])}
+          {"".join([f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.92) !important;text-decoration:underline">{a["title"][:95]}</a></div>' for a in top_arts[:5]])}
         </div>''', unsafe_allow_html=True)
 
         for i, art in enumerate(top_arts[:10]):
@@ -3034,7 +3032,7 @@ with main_col:
     today = datetime.now().strftime("%a, %d %b %Y")
     top3 = domain_articles[:3]
     briefing_items_html = "".join([
-        f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.9);text-decoration:underline">{a["title"][:85]}</a></div>'
+        f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.9) !important;text-decoration:underline">{a["title"][:85]}</a></div>'
         for a in top3
     ]) if top3 else '<div class="ow-briefing-item" style="opacity:0.7">Loading articles for your topics…</div>'
     src_set = len(set(a["source"] for a in domain_articles)) if domain_articles else 0
