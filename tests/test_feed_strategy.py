@@ -139,9 +139,9 @@ class RankingBasicsTest(unittest.TestCase):
             art("Narrow laboratory note on enzyme kinetics", topic="Health Economics",
                 source="OpenAlex", date="2026-10-23", relevance=0.95),
             art("Central bank raises interest rates sharply", topic="Policy & Government",
-                source="Reuters", date="2026-10-22", relevance=0.2),
+                source="Reuters", date="2026-10-22", relevance=0.35),
             art("Central bank raises interest rates again", topic="Policy & Government",
-                source="BBC", date="2026-10-22", relevance=0.2),
+                source="BBC", date="2026-10-22", relevance=0.35),
         ]
         emerging = fs.rank_emerging(pool, ["Health Economics"], {}, today=TODAY)
         for_you = fs.rank_for_you(pool, ["Health Economics"], {}, today=TODAY)
@@ -175,11 +175,27 @@ class RankingBasicsTest(unittest.TestCase):
     # 12. Missing metadata does not crash ranking
     def test_missing_metadata_is_tolerated(self):
         sparse = {"title": "Only a title", "url": "https://example.org/x",
-                  "topic": "Health Economics"}
+                  "topic": "Health Economics", "relevance": 0.5,
+                  "date": "2026-10-23"}
         for ranker in (fs.rank_for_you, fs.rank_my_fields, fs.rank_emerging):
             result = ranker([sparse], ["Health Economics"], {}, today=TODAY)
             self.assertEqual(len(result), 1, ranker.__name__)
         self.assertEqual(len(fs.rank_broaden([sparse], [], {}, today=TODAY)), 1)
+
+    def test_undated_record_is_not_a_recent_development(self):
+        undated = {"title": "Only a title", "url": "https://example.org/x",
+                   "topic": "Health Economics", "relevance": 0.5}
+        self.assertEqual(
+            fs.rank_emerging([undated], ["Health Economics"], {}, today=TODAY), [])
+
+    def test_record_without_relevance_is_not_eligible(self):
+        # Missing relevance is treated as 0, so it is excluded rather than
+        # guessed — no ranker should crash or invent a score.
+        sparse = {"title": "Only a title", "url": "https://example.org/x",
+                  "topic": "Health Economics"}
+        for ranker in (fs.rank_for_you, fs.rank_my_fields, fs.rank_emerging):
+            self.assertEqual(ranker([sparse], ["Health Economics"], {}, today=TODAY), [])
+        self.assertEqual(fs.rank_broaden([sparse], [], {}, today=TODAY), [])
 
     # 14. Empty pools yield empty feeds
     def test_empty_pool_returns_empty_feed(self):

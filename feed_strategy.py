@@ -32,6 +32,8 @@ import re
 from datetime import datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import content_quality as cq
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration — every weight used by the rankers lives here.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -46,8 +48,14 @@ CONFIG = {
         "profile": 0.05,
         "discovery_penalty": 0.72,   # outside-interest items rank slightly lower
         "max_per_source": 3,
-        "max_per_topic": 4,
+        "max_per_topic": 6,
         "limit": 25,
+        # Discovery is deliberately a minority of the feed (about 4 items) and
+        # must be current: old papers are not useful discovery.
+        "discovery_slots": 4,
+        "discovery_max_per_topic": 2,
+        "discovery_max_age_days": 180,
+        "min_relevance": 0.30,
     },
     # My Fields: strongest interest signal, subtopics matter most.
     "my_fields": {
@@ -58,9 +66,10 @@ CONFIG = {
         "quality": 0.08,
         "profile": 0.05,
         "max_per_source": 3,
-        "max_per_topic": 4,
+        "max_per_topic": 8,           # a 2-topic feed should not stop at 8 items
         "max_per_topic_filtered": 8,  # single-interest view may be more focused
         "limit": 25,
+        "min_relevance": 0.30,
     },
     # Emerging: recency + cross-source corroboration + source quality.
     "emerging": {
@@ -71,8 +80,12 @@ CONFIG = {
         "preference": 0.05,
         "interest_bonus": 0.08,  # small nudge toward the user's own fields
         "max_per_source": 3,
-        "max_per_topic": 4,
+        "max_per_topic": 6,
         "limit": 25,
+        "min_relevance": 0.25,
+        # A "recent development" must actually be recent and dated. Undated
+        # records are excluded rather than presented as new.
+        "max_age_days": 45,
     },
     # Broaden: quality + accessibility of material outside the user's interests.
     "broaden": {
@@ -81,10 +94,11 @@ CONFIG = {
         "preference": 0.20,
         "relevance": 0.15,
         "max_per_source": 2,
-        "max_per_topic": 3,
+        "max_per_topic": 6,
         "limit": 25,
         "min_outside_before_fallback": 8,
         "fallback_limit": 6,
+        "min_relevance": 0.20,
     },
 }
 
@@ -180,7 +194,7 @@ def parse_date(value):
         return None
     candidates = [text, text[:10], text[:19]]
     formats = ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%d %b %Y", "%d %B %Y",
-               "%b %d, %Y", "%B %d, %Y", "%Y-%m", "%Y")
+               "%b %d, %Y", "%B %d, %Y", "%Y-%m", "%B %Y", "%b %Y", "%Y")
     for candidate in candidates:
         for fmt in formats:
             try:
@@ -210,8 +224,16 @@ def freshness(date_value, today=None):
 
 
 def source_quality(article):
-    """Heuristic source credibility in [0.4, 0.85] — a tier, not a verdict."""
-    source = (article.get("source") or "").strip().lower()
+    """Heuristic source credibility in [0.4, 0.85] — a tier, not a verdict.
+
+    Scholarly adapters now publish the journal as ``source`` and the index as
+    ``retrieved_via``; the index is evidence of quality, the journal is the
+    publisher used for diversity and corroboration.
+    """
+    source = " ".join(filter(None, [
+        (article.get("source") or "").strip().lower(),
+        (article.get("retrieved_via") or "").strip().lower(),
+    ]))
     if not source:
         return MISSING_QUALITY
     for score, needles in QUALITY_TIERS.items():
@@ -228,7 +250,7 @@ def infer_content_type(article):
 
     haystack = " ".join(filter(None, [
         article.get("title"), article.get("summary"),
-        article.get("source"),
+        article.get("source"), article.get("retrieved_via"),
     ])).lower()
     if not haystack:
         return "news"
@@ -237,8 +259,7 @@ def infer_content_type(article):
     for kind in ("grants", "policy", "research", "explainer", "industry"):
         if TYPE_PATTERNS[kind].search(haystack):
             return kind
-    if any(research_source in (article.get("source") or "").lower()
-           for research_source in RESEARCH_SOURCES):
+    if any(research_source in haystack for research_source in RESEARCH_SOURCES):
         return "research"
     return "news"
 
@@ -338,20 +359,14 @@ def title_key(title):
 # Google News labels every item with the aggregator, not the publisher. The
 # publisher is appended to the headline ("… - The Hindu"), so use that for
 # corroboration counting — otherwise two locale variants of the same feed look
-# like two independent sources.
-AGGREGATOR_SOURCES = {"google news", "google news india"}
+# like two independent sources. The single implementation lives in
+# content_quality so the UI, briefing counts and ranking cannot disagree.
+AGGREGATOR_SOURCES = cq.AGGREGATOR_SOURCES
 
 
 def effective_source(article):
     """Publisher name usable for corroboration (unwraps Google News labels)."""
-    source = (article.get("source") or "").strip()
-    if source.lower() in AGGREGATOR_SOURCES:
-        title = (article.get("title") or "").strip()
-        if " - " in title:
-            tail = title.rsplit(" - ", 1)[1].strip()
-            if 2 < len(tail) <= 80:
-                return tail
-    return source
+    return cq.publisher(article)
 
 
 def story_title(article):
@@ -463,6 +478,16 @@ def _relevance(article):
         return 0.0
 
 
+def _eligible(pool, min_relevance):
+    """Records that clear this feed's relevance floor.
+
+    The structural gate already ran at adapter output; this is the documented
+    ranking threshold, so a weak match can never appear in a personalised feed
+    simply because the feed had few candidates.
+    """
+    return [a for a in (pool or []) if _relevance(a) >= min_relevance]
+
+
 def _subtopic_for(article, subtopics_by_topic):
     topic = article.get("topic") or ""
     return subtopic_match(article, (subtopics_by_topic or {}).get(topic) or [])
@@ -479,8 +504,16 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None)
     """
     cfg = CONFIG["for_you"]
     user_topics = set(topics or [])
-    scored = []
-    for article in pool or []:
+    today = today or datetime.now()
+    discovery_cutoff = cfg["discovery_max_age_days"]
+
+    def is_current_discovery(article):
+        published = parse_date(article.get("date"))
+        return (published is not None
+                and (today - published).days <= discovery_cutoff)
+
+    user_scored, discovery_scored = [], []
+    for article in _eligible(pool, cfg["min_relevance"]):
         features = {
             "relevance": _relevance(article),
             "subtopic": _subtopic_for(article, subtopics),
@@ -490,11 +523,32 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None)
             "profile": profile_affinity(article, role),
         }
         score = _weighted(features, cfg)
-        if user_topics and (article.get("topic") or "") not in user_topics:
+        outside = bool(user_topics) and (article.get("topic") or "") not in user_topics
+        if outside:
+            if not is_current_discovery(article):
+                continue
             score *= cfg["discovery_penalty"]
-        scored.append((score, article))
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    return apply_diversity(scored, cfg["max_per_source"], cfg["max_per_topic"], cfg["limit"])
+            discovery_scored.append((score, article))
+        else:
+            user_scored.append((score, article))
+
+    user_ranked = apply_diversity(user_scored, cfg["max_per_source"],
+                                  cfg["max_per_topic"], cfg["limit"])
+    # Discovery is a small, explicit part of For You — never half the feed.
+    slots = cfg["discovery_slots"]
+    discovery_ranked = apply_diversity(
+        discovery_scored, cfg["max_per_source"],
+        cfg["discovery_max_per_topic"], slots) if slots else []
+
+    ranked = user_ranked + discovery_ranked
+    score_by_id = {id(article): score
+                   for score, article in user_scored + discovery_scored}
+    ranked.sort(key=lambda article: score_by_id.get(id(article), 0.0), reverse=True)
+    # Re-apply diversity across the combined list: a publisher must not exceed
+    # the cap just because it appears in both the interest and discovery parts.
+    return apply_diversity([(score_by_id[id(article)], article) for article in ranked],
+                           cfg["max_per_source"], cfg["max_per_topic"],
+                           cfg["limit"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -505,7 +559,7 @@ def rank_my_fields(pool, topics, subtopics, preferences=(), role=None,
     """Interest-faithful feed; optionally restricted to a single interest."""
     cfg = CONFIG["my_fields"]
     user_topics = set(topics or [])
-    candidates = [a for a in (pool or [])
+    candidates = [a for a in _eligible(pool, cfg["min_relevance"])
                   if not user_topics or (a.get("topic") or "") in user_topics]
     if filter_topic and filter_topic != "All":
         candidates = [a for a in candidates if (a.get("topic") or "") == filter_topic]
@@ -586,7 +640,16 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
     labelled "recent developments" in the UI, not confirmed trends.
     """
     cfg = CONFIG["emerging"]
-    articles = list(pool or [])
+    today = today or datetime.now()
+    max_age = cfg["max_age_days"]
+
+    def is_recent(article):
+        published = parse_date(article.get("date"))
+        if published is None:
+            return False
+        return (today - published).days <= max_age
+
+    articles = [a for a in _eligible(pool, cfg["min_relevance"]) if is_recent(a)]
     user_topics = set(topics or [])
     corroboration = corroboration_scores(articles)
     scored = []
@@ -648,7 +711,8 @@ def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
             value += 0.05
         return value
 
-    outside_items = sorted(((score(a), a) for a in (pool or []) if is_outside(a)),
+    eligible = _eligible(pool, cfg["min_relevance"])
+    outside_items = sorted(((score(a), a) for a in eligible if is_outside(a)),
                            key=lambda pair: pair[0], reverse=True)
     chosen = apply_diversity(outside_items, cfg["max_per_source"],
                              cfg["max_per_topic"], cfg["limit"])
@@ -657,7 +721,7 @@ def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
     if len(outside_items) < cfg["min_outside_before_fallback"]:
         chosen_ids = {id(a) for a in chosen}
         fallback = sorted(
-            ((score(a), a) for a in (pool or [])
+            ((score(a), a) for a in eligible
              if id(a) not in chosen_ids
              and (a.get("topic") or "") in user_topics
              and infer_content_type(a) in ("explainer", "research")),
@@ -714,9 +778,24 @@ def build_pool(loader, topics, subtopics_by_topic=None, discovery_topics=(),
             errors.append({"topic": topic, "error": str(exc) or exc.__class__.__name__})
             continue
         for article in articles:
-            if isinstance(article, dict) and article.get("title"):
-                article.setdefault("topic", topic)
-                pool.append(article)
+            if not isinstance(article, dict):
+                continue
+            article.setdefault("topic", topic)
+            # Re-validate: a loader may add records that bypassed the adapter
+            # gate (e.g. a followed source), and generic pages must never reach
+            # ranking or briefing counts.
+            ok, _reason = cq.validate(article, article.get("topic") or topic)
+            if not ok:
+                continue
+            try:
+                relevance = float(article.get("relevance") or 0.0)
+            except (TypeError, ValueError):
+                relevance = 0.0
+            # Below the lowest feed floor, a record is ineligible for every
+            # strategy, so it is not allowed to consume pool or briefing budget.
+            if relevance < cq.RELEVANCE["min_broaden"]:
+                continue
+            pool.append(article)
 
     return dedupe_articles(pool), errors
 

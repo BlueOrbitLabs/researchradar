@@ -11,6 +11,9 @@ import io as _io, base64 as _b64
 
 # Pure ranking logic (no Streamlit, no I/O) — see feed_strategy.py and tests/
 import feed_strategy as fs
+# Content-quality gate, relevance scoring, briefing eligibility — see content_quality.py
+import content_quality as cq
+from xml.etree import ElementTree as ET
 
 logger = logging.getLogger("owlume")
 
@@ -350,6 +353,32 @@ def _ai_display(result):
 # UNIVERSAL DISCOVERY ENGINE — PROVIDER ADAPTERS + PIPELINE
 # ═══════════════════════════════════════════════════════════
 
+# Deterministic provider selection when the AI expansion is unavailable. It
+# mirrors the prompt rules: PubMed only for biomedicine, arXiv only for
+# physics/CS/maths/econ, NBER only for economics/finance, OpenAlex and DOAJ for
+# scholarly coverage, Google News always. This keeps each adapter scoped to
+# topics it can actually serve.
+_FIELD_PROVIDER_RULES = (
+    ("pubmed", ("health", "medicine", "medical", "clinical", "biology", "biotech",
+                "neuro", "epidem", "nursing", "psych", "pharma", "vaccin")),
+    ("arxiv", ("ai", "artificial intelligence", "technology", "physics", "math",
+               "computer", "computing", "quantum", "machine learning", "science",
+               "engineering", "robotics", "data", "semiconductor")),
+    ("nber", ("econom", "finance", "financial", "market", "business", "trade",
+              "tax", "labour", "labor", "monetary", "fiscal")),
+)
+
+
+def _fallback_providers(topic: str) -> list:
+    """Providers appropriate to ``topic`` when AI expansion is unavailable."""
+    lowered = (topic or "").lower()
+    providers = ["gnews", "openalex", "doaj"]
+    for provider, cues in _FIELD_PROVIDER_RULES:
+        if any(cue in lowered for cue in cues):
+            providers.append(provider)
+    return providers
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def expand_topic_keywords(topic: str, subtopics_tuple: tuple = ()) -> dict:
     """Ask OpenAI to expand any topic into search terms and select relevant providers.
@@ -388,13 +417,25 @@ Return ONLY a JSON object (no markdown) with these keys:
         data.setdefault("relevance_core", [topic])
         return data
     except Exception as e:
-        return {"terms": [topic], "providers": ["gnews", "openalex"],
+        return {"terms": [topic], "providers": _fallback_providers(topic),
                 "arxiv_cats": [], "field_type": "hybrid", "relevance_core": [topic]}
 
 
-def _make_article(title, url, summary, date_str, source, topic, relevance=0.5):
-    return {"title": title.strip(), "url": url, "summary": summary[:300],
-            "date": date_str, "source": source, "topic": topic, "relevance": relevance}
+def _make_article(title, url, summary, date_str, source, topic, relevance=0.5, **extra):
+    """One normalised article record. Missing metadata stays empty — never invented."""
+    record = {
+        "title": (title or "").strip(),
+        "url": (url or "").strip(),
+        "summary": (summary or "").strip()[:400],
+        "date": (date_str or "").strip(),
+        "source": (source or "").strip(),
+        "topic": topic,
+        "relevance": relevance,
+    }
+    for key, value in extra.items():
+        if value not in (None, "", [], {}):
+            record[key] = value
+    return record
 
 
 def _parse_date(entry):
@@ -407,77 +448,253 @@ def _parse_date(entry):
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def _fetch_rss(url: str, label: str, topic: str, max_items: int = 10) -> list:
-    """Generic RSS/Atom fetcher — works for any feed URL."""
+    """Generic RSS/Atom fetcher.
+
+    Skips entries without a title or link (a feed item must point at content).
+    For news aggregators the displayed source is the real publisher parsed from
+    the headline suffix, so a feed is never labelled "Google News" as if that
+    were the outlet.
+    """
     try:
         r = requests.get(url, headers={"User-Agent": "Owlume/1.0 Research Feed"}, timeout=12)
         feed = feedparser.parse(r.content)
         arts = []
         for e in feed.entries[:max_items]:
-            title = e.get("title", "Untitled").strip()
-            if title == "Untitled": continue
-            arts.append(_make_article(
-                title=title, url=e.get("link", ""),
-                summary=re.sub(r"<[^>]+>", "", e.get("summary", "")).strip(),
-                date_str=_parse_date(e), source=label, topic=topic
-            ))
+            title = (e.get("title") or "").strip()
+            link = (e.get("link") or "").strip()
+            if not title or not link:
+                continue
+            summary = re.sub(r"<[^>]+>", " ", e.get("summary", "") or "").strip()
+            record = _make_article(title=title, url=link, summary=summary,
+                                   date_str=_parse_date(e), source=label, topic=topic)
+            if label.lower() in cq.AGGREGATOR_SOURCES:
+                record["retrieved_via"] = label
+                record["source"] = cq.publisher(record) or label
+                # The aggregator appends " - Publisher" to the headline. Keep
+                # the publisher as the source and the headline as the title.
+                if record["source"] != label and " - " in title:
+                    record["title"] = title.rsplit(" - ", 1)[0].strip()
+            arts.append(record)
         return arts
-    except: return []
+    except Exception as exc:
+        logger.warning("RSS fetch failed (%s): %s", label, exc)
+        return []
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def _fetch_openalex(query: str, topic: str, max_items: int = 10) -> list:
-    """OpenAlex API — free, covers all scholarly fields: physics to history to law."""
+    """OpenAlex works API — scholarly records only.
+
+    ``type:article|review|preprint`` removes library guides, book chapters and
+    other non-article records; ``is_paratext:false`` removes front matter.
+    """
     try:
         q = urllib.parse.quote_plus(query)
         url = (f"https://api.openalex.org/works?search={q}"
                f"&sort=relevance_score:desc&per-page={max_items}"
-               f"&filter=is_paratext:false"
-               f"&select=title,doi,abstract_inverted_index,publication_date,primary_location")
-        r = requests.get(url, headers={"User-Agent": "Owlume/1.0", "Accept": "application/json"}, timeout=12)
+               f"&filter=is_paratext:false,type:article|review|preprint"
+               f"&select=title,doi,abstract_inverted_index,publication_date,type,primary_location")
+        r = requests.get(url, headers={"User-Agent": "Owlume/1.0", "Accept": "application/json"}, timeout=15)
         data = r.json()
         arts = []
         for w in data.get("results", []):
-            title = w.get("title") or ""
-            if not title: continue
+            title = (w.get("title") or "").strip()
+            if not title:
+                continue
+            location = w.get("primary_location") or {}
+            container = ((location.get("source") or {}).get("display_name") or "").strip()
+            # A record titled exactly like its journal is a journal/issue page.
+            if container and cq.normalise(title) == cq.normalise(container):
+                continue
             doi = w.get("doi", "")
             link = f"https://doi.org/{doi.replace('https://doi.org/','')}" if doi else ""
             if not link:
-                loc = w.get("primary_location") or {}
-                link = (loc.get("landing_page_url") or loc.get("pdf_url") or "")
-            # Reconstruct abstract from inverted index
+                link = (location.get("landing_page_url") or location.get("pdf_url") or "")
             inv = w.get("abstract_inverted_index") or {}
             abstract = ""
             if inv:
                 positions = [(pos, word) for word, pos_list in inv.items() for pos in pos_list]
-                positions.sort(); abstract = " ".join(w for _, w in positions[:60])
-            date_str = w.get("publication_date", "")[:10]
-            arts.append(_make_article(title=title, url=link, summary=abstract,
-                                      date_str=date_str, source="OpenAlex", topic=topic))
+                positions.sort()
+                abstract = " ".join(word for _, word in positions[:120])
+            arts.append(_make_article(
+                title=title, url=link, summary=abstract,
+                date_str=(w.get("publication_date") or "")[:10],
+                source=container or "OpenAlex", topic=topic,
+                retrieved_via="OpenAlex",
+                kind=w.get("type") or "", container=container,
+            ))
         return arts
-    except: return []
+    except Exception as exc:
+        logger.warning("OpenAlex fetch failed (%s): %s", query, exc)
+        return []
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _fetch_doaj(query: str, topic: str, max_items: int = 8) -> list:
-    """DOAJ — Directory of Open Access Journals, all disciplines."""
+def _fetch_pubmed(query: str, topic: str, max_items: int = 8) -> list:
+    """PubMed via NCBI E-utilities (esearch + efetch).
+
+    The previous ``pubmed.ncbi.nlm.nih.gov/rss/search`` endpoint returns HTTP
+    403 and silently produced no articles. Records are discipline-scoped: PubMed
+    only indexes biomedicine, so an index hit is one relevance signal (never a
+    High match on its own).
+    """
+    try:
+        base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+        search_url = (f"{base}/esearch.fcgi?db=pubmed&retmode=json&retmax={max_items}"
+                      f"&sort=date&tool=owlume&term={urllib.parse.quote_plus(query)}")
+        ids = (requests.get(search_url, timeout=15).json()
+               .get("esearchresult", {}).get("idlist", []))
+        if not ids:
+            return []
+        fetch_url = (f"{base}/efetch.fcgi?db=pubmed&retmode=xml&id={','.join(ids)}")
+        root = ET.fromstring(requests.get(fetch_url, timeout=20).text)
+        arts = []
+        for art in root.findall(".//PubmedArticle"):
+            title_el = art.find(".//ArticleTitle")
+            title = "".join(title_el.itertext()).strip() if title_el is not None else ""
+            if not title:
+                continue
+            abstract = " ".join("".join(a.itertext()) for a in art.findall(".//AbstractText"))
+            journal = art.findtext(".//Journal/Title", "") or ""
+            year = art.findtext(".//JournalIssue/PubDate/Year", "") or ""
+            month = art.findtext(".//JournalIssue/PubDate/Month", "") or ""
+            day = art.findtext(".//JournalIssue/PubDate/Day", "") or ""
+            date_str = " ".join(part for part in (year, month, day) if part).strip()
+            pmid = art.findtext(".//PMID", "") or ""
+            doi = ""
+            for aid in art.findall(".//ArticleId"):
+                if aid.get("IdType") == "doi":
+                    doi = (aid.text or "").strip()
+            link = f"https://doi.org/{doi}" if doi else (
+                f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else "")
+            arts.append(_make_article(
+                title=title, url=link, summary=abstract, date_str=date_str,
+                source=journal or "PubMed", topic=topic, kind="article",
+                retrieved_via="PubMed", container=journal, discipline_scoped=True,
+            ))
+        return arts
+    except Exception as exc:
+        logger.warning("PubMed fetch failed (%s): %s", query, exc)
+        return []
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _fetch_arxiv(query: str, topic: str, cats: tuple = (), max_items: int = 8) -> list:
+    """arXiv API search constrained to the topic's categories.
+
+    The old adapter read ``arxiv.org/rss/<category>`` and returned the latest
+    papers in a category regardless of the user's topic. A keyword search with
+    a category constraint keeps the results inside the requested field.
+    """
+    try:
+        phrase = re.sub(r"[^A-Za-z0-9 ]", " ", query or "").strip()
+        phrase = re.sub(r"\s+", " ", phrase)
+        if not phrase:
+            return []
+        parts = [f'all:"{phrase}"']
+        cat_terms = [f"cat:{c}" for c in (cats or []) if c]
+        if cat_terms:
+            parts.append("(" + " OR ".join(cat_terms) + ")")
+        search_query = " AND ".join(parts)
+        url = ("https://export.arxiv.org/api/query?search_query="
+               + urllib.parse.quote(search_query)
+               + f"&sortBy=submittedDate&sortOrder=descending&max_results={max_items}")
+        feed = feedparser.parse(requests.get(url, timeout=20).content)
+        arts = []
+        for e in feed.entries:
+            title = re.sub(r"\s+", " ", (e.get("title") or "")).strip()
+            link = (e.get("link") or "").strip()
+            if not title or not link:
+                continue
+            arts.append(_make_article(
+                title=title, url=link,
+                summary=re.sub(r"\s+", " ", (e.get("summary") or "")).strip(),
+                date_str=(e.get("published") or "")[:10],
+                source="arXiv", topic=topic, kind="preprint",
+                retrieved_via="arXiv", discipline_scoped=True,
+            ))
+        return arts
+    except Exception as exc:
+        logger.warning("arXiv fetch failed (%s): %s", query, exc)
+        return []
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _fetch_doaj(query: str, topic: str, max_items: int = 6) -> list:
+    """DOAJ — Directory of Open Access Journals, all disciplines.
+
+    The previous call passed ``sort=relevance``, which DOAJ rejects with HTTP
+    400, so this adapter silently returned nothing. The parameter is removed.
+    """
     try:
         q = urllib.parse.quote_plus(query)
-        url = f"https://doaj.org/api/search/articles/{q}?pageSize={max_items}&sort=relevance"
-        r = requests.get(url, headers={"User-Agent": "Owlume/1.0"}, timeout=12)
+        url = f"https://doaj.org/api/search/articles/{q}?pageSize={max_items}"
+        r = requests.get(url, headers={"User-Agent": "Owlume/1.0"}, timeout=15)
         data = r.json()
         arts = []
         for item in data.get("results", []):
             bib = item.get("bibjson", {})
-            title = bib.get("title", "")
-            if not title: continue
+            title = (bib.get("title") or "").strip()
+            if not title:
+                continue
             links = bib.get("link", [])
             link = next((l.get("url", "") for l in links if l.get("type") == "fulltext"), "")
-            abstract = bib.get("abstract", "")[:300]
-            date_str = str(bib.get("year", ""))
-            arts.append(_make_article(title=title, url=link, summary=abstract,
-                                      date_str=date_str, source="DOAJ", topic=topic))
+            if not link:
+                link = next((l.get("url", "") for l in links if l.get("url")), "")
+            journal = (bib.get("journal") or {}).get("title", "") or ""
+            if journal and cq.normalise(title) == cq.normalise(journal):
+                continue
+            arts.append(_make_article(
+                title=title, url=link, summary=bib.get("abstract", ""),
+                date_str=str(bib.get("year", "")), source=journal or "DOAJ",
+                topic=topic, retrieved_via="DOAJ", container=journal,
+            ))
         return arts
-    except: return []
+    except Exception as exc:
+        logger.warning("DOAJ fetch failed (%s): %s", query, exc)
+        return []
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _fetch_nber(query: str, topic: str, max_items: int = 8) -> list:
+    """NBER working papers via their JSON listing API.
+
+    The old feedburner URL returns HTTP 404. NBER's listing endpoint is not
+    query-scoped (``q`` is ignored and the newest 50 papers are returned), so it
+    is sorted by publication date and each record is then filtered by the same
+    relevance gate as everything else — the adapter never claims the papers
+    match the user's topic.
+    """
+    try:
+        url = ("https://www.nber.org/api/v1/working_page_listing/"
+               "contentType/working_paper/_/_/search")
+        params = {"q": query or "", "sortBy": "public_date",
+                  "sortDirection": "desc", "page": 1}
+        data = requests.get(url, params=params,
+                            headers={"User-Agent": "Owlume/1.0"}, timeout=15).json()
+        arts = []
+        for item in (data.get("results") or [])[:max_items]:
+            title = (item.get("title") or "").strip()
+            link = (item.get("url") or "").strip()
+            if not title or not link:
+                continue
+            if link.startswith("/"):
+                link = "https://www.nber.org" + link
+            authors = [re.sub(r"<[^>]+>", "", a).strip()
+                       for a in (item.get("authors") or [])]
+            summary = (item.get("abstract") or "").strip()
+            if authors:
+                summary = "By " + ", ".join(a for a in authors if a) + ". " + summary
+            arts.append(_make_article(
+                title=title, url=link, summary=summary,
+                date_str=(item.get("displaydate") or "").strip(),
+                source="NBER", topic=topic, kind="working-paper",
+                retrieved_via="NBER",
+            ))
+        return arts
+    except Exception as exc:
+        logger.warning("NBER fetch failed (%s): %s", query, exc)
+        return []
 
 
 def _select_arxiv_cats(topic: str, ai_cats: list) -> list:
@@ -491,30 +708,49 @@ def _select_arxiv_cats(topic: str, ai_cats: list) -> list:
     return cats[:4]  # cap at 4 categories to limit API calls
 
 
-def score_relevance(article: dict, topic: str, expanded: dict) -> float:
-    """Score 0–1 how relevant an article is to the topic and its expanded terms.
-    Used to filter out weakly-matching articles from the personalised feed."""
-    text = (article.get("title", "") + " " + article.get("summary", "")).lower()
-    if not text.strip(): return 0.0
+def _catalogue_terms(topic: str):
+    """Curated field vocabulary for a topic: (keywords, subtopics)."""
+    entry = TOPIC_CATALOGUE.get(topic) or {}
+    return list(entry.get("keywords") or []), list(entry.get("subtopics") or [])
 
-    score = 0.0
-    # Core topic words
-    topic_words = set(re.findall(r'\b\w{4,}\b', topic.lower()))
-    text_words = set(re.findall(r'\b\w{4,}\b', text))
-    overlap = topic_words & text_words
-    score += min(0.45, len(overlap) / max(len(topic_words), 1) * 0.45)
 
-    # Relevance-core terms (essential phrases from AI expansion)
-    core_terms = expanded.get("relevance_core", [])
-    core_hits = sum(1 for t in core_terms if t.lower() in text)
-    score += min(0.35, core_hits / max(len(core_terms), 1) * 0.35)
+def _news_query(topic: str, subtopics, expanded: dict) -> str:
+    """Build a focused news query from field vocabulary instead of a bare label.
 
-    # General expanded terms
-    all_terms = expanded.get("terms", [])
-    term_hits = sum(1 for t in all_terms if t.lower() in text)
-    score += min(0.20, term_hits / max(len(all_terms), 1) * 0.20)
+    Searching for the category name ("Health & Medicine") matches library
+    guides and celebrity stories. Searching for the field's vocabulary keeps
+    results inside the field.
+    """
+    keywords, _ = _catalogue_terms(topic)
+    terms = []
+    for term in list(subtopics or [])[:2] + keywords[:4] + list(expanded.get("terms") or [])[:2]:
+        term = (term or "").strip()
+        if term and term.lower() not in {t.lower() for t in terms}:
+            terms.append(term)
+    if not terms:
+        terms = [topic]
+    parts = [f'"{t}"' if " " in t else t for t in terms[:6]]
+    return "(" + " OR ".join(parts) + ") when:30d"
 
-    return round(min(1.0, score), 3)
+
+def score_relevance(article: dict, topic: str, expanded: dict, subtopics=None) -> float:
+    """Score 0–1 how well a record matches a topic (see content_quality.RELEVANCE).
+
+    Delegates to the documented scorer so one set of thresholds and caps applies
+    everywhere (feeds, labels, briefing). The topic's catalogue subtopics are
+    always field vocabulary, even when the user selected no subtopics.
+    """
+    keywords, catalogue_subtopics = _catalogue_terms(topic)
+    subs = list(dict.fromkeys(list(subtopics or []) + catalogue_subtopics))
+    return cq.relevance_score(
+        article, topic,
+        subtopics=tuple(subs),
+        keywords=keywords,
+        core_terms=expanded.get("relevance_core") or [],
+        terms=expanded.get("terms") or [],
+        discipline_scoped=bool(article.get("discipline_scoped")),
+        lifestyle_penalty=topic not in {"Careers", "Productivity"},
+    )
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -524,84 +760,78 @@ def fetch_feed(url, label, topic):
 
 
 def load_topic_articles(topic: str, subtopics=None) -> list:
-    """Universal discovery pipeline — works for any topic without code changes.
-    Steps: expand → select providers → fetch → score relevance → deduplicate → rank."""
+    """Universal discovery pipeline — expand → fetch → gate → score → dedupe.
+
+    Retrieval is bounded (one page per adapter) and every record passes the
+    content-quality gate before it can be ranked, labelled or counted.
+    """
     sub_tuple = tuple(subtopics) if subtopics else ()
     expanded = expand_topic_keywords(topic, sub_tuple)
-    providers = expanded.get("providers", ["gnews"])
+    providers = expanded.get("providers") or ["gnews"]
 
-    # Build primary search query from topic + subtopics
-    q_parts = [topic] + (list(subtopics) if subtopics else [])
-    q_str = " ".join(q_parts[:3])  # keep query focused
-    q_enc = urllib.parse.quote_plus(q_str)
+    q_parts = [topic] + list(subtopics or [])
+    q_str = " ".join(q_parts[:3])
 
     all_arts: list = []
 
-    # ── Google News (universal news, always included) ──
+    # ── Google News (field-vocabulary query, recent window) ──
     if "gnews" in providers:
+        gq = urllib.parse.quote_plus(_news_query(topic, sub_tuple, expanded))
         all_arts += _fetch_rss(
-            f"https://news.google.com/rss/search?q={q_enc}&hl=en&gl=US&ceid=US:en",
-            "Google News", topic)
+            f"https://news.google.com/rss/search?q={gq}&hl=en&gl=US&ceid=US:en",
+            "Google News", topic, max_items=25)
         all_arts += _fetch_rss(
-            f"https://news.google.com/rss/search?q={q_enc}&hl=en-IN&gl=IN&ceid=IN:en",
-            "Google News India", topic)
+            f"https://news.google.com/rss/search?q={gq}&hl=en-IN&gl=IN&ceid=IN:en",
+            "Google News India", topic, max_items=15)
 
-    # ── PubMed (medicine, health, biology) ──
+    # ── PubMed (biomedicine; E-utilities) ──
     if "pubmed" in providers:
-        pm_q = urllib.parse.quote_plus(q_str)
-        all_arts += _fetch_rss(
-            f"https://pubmed.ncbi.nlm.nih.gov/rss/search/?term={pm_q}&limit=15",
-            "PubMed", topic)
+        all_arts += _fetch_pubmed(q_str, topic, max_items=8)
 
-    # ── arXiv (physics, math, CS, econ, biology — any scientific field) ──
+    # ── arXiv (category-constrained API search) ──
     if "arxiv" in providers:
-        cats = _select_arxiv_cats(topic, expanded.get("arxiv_cats", []))
-        for cat in cats[:3]:
-            all_arts += _fetch_rss(f"https://arxiv.org/rss/{cat}", f"arXiv:{cat}", topic, max_items=6)
+        cats = _select_arxiv_cats(topic, expanded.get("arxiv_cats") or [])
+        all_arts += _fetch_arxiv(q_str, topic, tuple(cats[:3]), max_items=8)
 
     # ── NBER (economics, finance) ──
     if "nber" in providers:
-        all_arts += _fetch_rss("https://feeds.feedburner.com/nber/new", "NBER", topic)
+        all_arts += _fetch_nber(q_str, topic, max_items=8)
 
-    # ── OpenAlex (any academic/scholarly field) ──
+    # ── OpenAlex (scholarly articles only) ──
     if "openalex" in providers:
-        all_arts += _fetch_openalex(q_str, topic)
-        # Also search with the top expanded term for broader coverage
-        if expanded.get("terms"):
-            all_arts += _fetch_openalex(expanded["terms"][0], topic, max_items=6)
+        all_arts += _fetch_openalex(q_str, topic, max_items=10)
+        for extra_term in list(expanded.get("terms") or [])[:1]:
+            if extra_term and extra_term.lower() != topic.lower():
+                all_arts += _fetch_openalex(extra_term, topic, max_items=6)
 
-    # ── DOAJ (open-access journals, all disciplines) ──
+    # ── DOAJ (open-access journals) ──
     if "doaj" in providers:
-        all_arts += _fetch_doaj(q_str, topic)
+        all_arts += _fetch_doaj(q_str, topic, max_items=6)
 
     # Include articles from explicitly followed sources
-    followed_arts = load_articles_from_followed_sources(topic, subtopics)
-    all_arts += followed_arts
+    all_arts += load_articles_from_followed_sources(topic, subtopics)
 
-    # Score relevance for every article
+    # ── Structural gate: drop generic pages, guides, invalid records ──
+    all_arts, report = cq.filter_articles(all_arts, topic)
+    cq.record_report(topic, report)
+    if report:
+        logger.info("quality gate for %s: %s", topic, dict(report))
+
+    # ── Relevance: supported evidence only ──
     for art in all_arts:
-        art["relevance"] = score_relevance(art, topic, expanded)
+        art["relevance"] = score_relevance(art, topic, expanded, sub_tuple)
 
-    # Deduplicate by title similarity
+    # ── Deduplicate (DOI → URL → title) and order ──
     all_arts = deduplicate_articles(all_arts)
-
-    # Sort: relevance descending, recency as tiebreaker
-    all_arts.sort(key=lambda a: a.get("relevance", 0), reverse=True)
-
+    all_arts.sort(key=lambda a: (a.get("relevance", 0),
+                                 cq.parse_date(a.get("date")) or dt.date.min),
+                  reverse=True)
     return all_arts
 
 
 def deduplicate_articles(articles: list) -> list:
-    seen, out = [], []
-    for art in articles:
-        key = re.sub(r'[^a-z0-9 ]', '', art["title"].lower())[:60]
-        words = set(key.split())
-        is_dup = any(
-            len(words & set(s.split())) / max(len(words | set(s.split())), 1) > 0.75
-            for s in seen
-        )
-        if not is_dup: seen.append(key); out.append(art)
-    return out
+    """Collapse duplicate records by DOI, canonical URL, then title similarity."""
+    return fs.dedupe_articles(articles)
 
 def cluster_articles(articles):
     clusters, used = [], set()
@@ -2399,7 +2629,6 @@ subtopics_for_active = st.session_state.subtopics.get(active, [])
 # Build a cached candidate pool from the user's saved interests (bounded).
 # Local News is deliberately excluded: it has its own cached retrieval path in
 # the Local News tab and must never be mixed into the general feeds.
-RELEVANCE_THRESHOLD = 0.10
 _pool_topics = [t for t in all_t if t != "Local News & Community"][:fs.MAX_TOPICS_PER_REFRESH]
 _pool_subtopics = {t: st.session_state.subtopics.get(t) for t in _pool_topics}
 # Deterministic per-day rotation so discovery is stable during a session but
@@ -2435,9 +2664,13 @@ feed_discovery_topics = st.session_state.get("feed_discovery_topics") or []
 
 # Back-compat alias used by existing tabs/search
 articles = feed_pool
-domain_articles = [a for a in feed_pool if a.get("relevance", 0) >= RELEVANCE_THRESHOLD]
-if len(domain_articles) < 5:
-    domain_articles = feed_pool[:20]
+# Eligible articles only: the documented relevance floor, never a fallback that
+# would reintroduce weak matches just to fill the page.
+domain_articles = [a for a in feed_pool
+                   if a.get("relevance", 0) >= cq.RELEVANCE["min_feed"]]
+# Daily briefing: eligible, deduplicated, dated inside the window. Counts shown
+# to the user are derived from this same list.
+briefing = cq.briefing_articles(feed_pool)
 
 # ── 2-column layout: sidebar + main ──
 sidebar_col, main_col = st.columns([1.2, 4.5], gap="small")
@@ -2669,25 +2902,26 @@ with main_col:
     st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">📊 Daily Briefing</div>', unsafe_allow_html=True)
     st.markdown(f'<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">{today_long} · Personalised for your topics</div>', unsafe_allow_html=True)
 
-    top_arts = domain_articles[:12]
+    briefing_tab = cq.briefing_articles(feed_pool, limit=12)
+    top_arts = briefing_tab["items"]
     if not top_arts:
-        st.info("No articles in your feed yet — add some topics to get started.")
+        st.info("No eligible articles from the last 7 days yet — add some topics or retry later.")
     else:
-        src_count = len(set(a["source"] for a in top_arts))
         st.markdown(f'''
         <div class="ow-briefing">
           <div class="ow-briefing-date">{today_long}</div>
-          <div class="ow-briefing-h">📰 Today's Top Stories</div>
-          <div class="ow-briefing-sub" style="margin-bottom:10px">{len(top_arts)} articles from {src_count} sources</div>
+          <div class="ow-briefing-h">📰 Recent Developments</div>
+          <div class="ow-briefing-sub" style="margin-bottom:10px">{briefing_tab["total"]} eligible articles from {briefing_tab["publishers"]} publishers in the last {briefing_tab["window_days"]} days</div>
           {"".join([f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.92) !important;text-decoration:underline">{a["title"][:95]}</a></div>' for a in top_arts[:5]])}
         </div>''', unsafe_allow_html=True)
 
         for i, art in enumerate(top_arts[:10]):
             rel = art.get("relevance", 0)
             rel_badge = ""
-            if rel >= 0.6:
+            label = cq.relevance_label(rel)
+            if label == "high":
                 rel_badge = '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">●● High match</span>'
-            elif rel >= 0.3:
+            elif label == "relevant":
                 rel_badge = '<span style="background:#fff8e1;color:#e65100;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">● Relevant</span>'
             st.markdown(f'''
             <div class="ow-art-card">
@@ -2950,19 +3184,18 @@ with main_col:
     # Search is applied per tab (see below) so it never rewrites a feed's
     # candidate selection — it only filters the list that tab ranks.
 
-    # Daily briefing card — top stories
+    # Daily briefing card — top stories from the eligible, dated set only.
     today = datetime.now().strftime("%a, %d %b %Y")
-    top3 = domain_articles[:3]
+    top3 = briefing["items"]
     briefing_items_html = "".join([
         f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.9) !important;text-decoration:underline">{a["title"][:85]}</a></div>'
         for a in top3
-    ]) if top3 else '<div class="ow-briefing-item" style="opacity:0.7">Loading articles for your topics…</div>'
-    src_set = len(set(a["source"] for a in domain_articles)) if domain_articles else 0
+    ]) if top3 else '<div class="ow-briefing-item" style="opacity:0.7">No eligible stories in the last 7 days yet.</div>'
     st.markdown(f'''
     <div class="ow-briefing">
       <div class="ow-briefing-date">{today}</div>
       <div class="ow-briefing-h">Your daily briefing</div>
-      <div class="ow-briefing-sub" style="margin-bottom:8px">{len(domain_articles)} articles from {src_set} sources today</div>
+      <div class="ow-briefing-sub" style="margin-bottom:8px">{briefing["total"]} eligible articles from {briefing["publishers"]} publishers in the last {briefing["window_days"]} days</div>
       {briefing_items_html}
     </div>''', unsafe_allow_html=True)
 
@@ -3048,7 +3281,8 @@ with main_col:
                     st.rerun()
             continue
 
-        high_rel = [a for a in tab_arts if a.get("relevance", 0) >= 0.4]
+        high_rel = [a for a in tab_arts
+                    if cq.relevance_label(a.get("relevance", 0)) == "high"]
         if high_rel:
             st.caption(f"📌 {len(high_rel)} high-match · {len(tab_arts)} articles in this feed")
         else:
@@ -3062,9 +3296,10 @@ with main_col:
 
             read_style = "opacity:0.55;" if is_read else ""
             rel_badge = ""
-            if rel >= 0.6:
+            label = cq.relevance_label(rel)
+            if label == "high":
                 rel_badge = '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">●● High match</span>'
-            elif rel >= 0.3:
+            elif label == "relevant":
                 rel_badge = '<span style="background:#fff8e1;color:#e65100;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">● Relevant</span>'
 
             st.markdown(f'''
