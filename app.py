@@ -189,7 +189,7 @@ def fuzzy_match_topic(query):
     q = query.strip().lower()
     for name in ALL_TOPIC_NAMES:
         if q in name.lower() or name.lower() in q: return name
-    matches = difflib.get_close_matches(q, [n.lower() for n in ALL_TOPIC_NAMES], n=1, cutoff=0.4)
+    matches = difflib.get_close_matches(q, [n.lower() for n in ALL_TOPIC_NAMES], n=1, cutoff=0.7)
     if matches:
         for name in ALL_TOPIC_NAMES:
             if name.lower() == matches[0]: return name
