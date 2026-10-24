@@ -2058,8 +2058,11 @@ if st.session_state.screen == "local_setup":
         st.markdown("**Add your location (optional)**")
         st.markdown('<div style="font-size:0.84rem;color:var(--muted);margin-bottom:12px">You can skip this step and set it later. We do not use your precise device location.</div>', unsafe_allow_html=True)
         city_val = st.text_input("City or region", key="local_city_input",
-                                 placeholder="e.g. Hyderabad, or Hyderabad, Telangana...",
+                                 placeholder="e.g. Hyderabad  (or  Hyderabad, Telangana)",
                                  value=st.session_state.local_city)
+        # Hint shown only before the user types; vanishes once a value is entered.
+        if not (city_val or "").strip():
+            st.caption("💡 Tip: type just your city, or 'City, State' to set both at once — e.g. 'Pune' or 'Pune, Maharashtra'.")
         # Allow "City, State/Region" in the single box; split automatically.
         if "," in city_val:
             _parts = [p.strip() for p in city_val.split(",", 1)]
