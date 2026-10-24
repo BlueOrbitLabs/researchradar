@@ -1102,27 +1102,30 @@ if st.query_params.get("dev_reset"):
 
 
 # ── Global query-param navigation router ────────────────────────────────────
+# Apply ALL relevant params in one pass before clearing/rerunning, so that
+# carrying state (e.g. ow_role) alongside a nav param doesn't get clobbered.
 _nav = st.query_params
+_nav_changed = False
 if "ow_start" in _nav:
-    st.query_params.clear()
-    st.session_state.screen = "role_select"; st.rerun()
+    st.session_state.screen = "role_select"; _nav_changed = True
 if "ow_role" in _nav:
     _rid = _nav["ow_role"]
     if _rid in {"student","competitive_exam","faculty","phd_researcher",
                 "working_professional","curious_learner","other","prefer_not_to_say"}:
         st.session_state.user_role = _rid
-    st.session_state.screen = "role_select"
+    # only force role_select if no explicit screen nav is also present
+    if "ow_skip" not in _nav and "ow_next" not in _nav and "ow_skip2" not in _nav and "ow_back" not in _nav and "ow_start" not in _nav:
+        st.session_state.screen = "role_select"
+    _nav_changed = True
+if "ow_skip" in _nav or ("ow_next" in _nav):
+    st.session_state.screen = "interests"; _nav_changed = True
+if "ow_skip2" in _nav:
+    st.session_state.screen = "discover_prefs"; _nav_changed = True
+if "ow_back" in _nav:
+    st.session_state.screen = "welcome"; _nav_changed = True
+if _nav_changed:
     st.query_params.clear()
     st.rerun()
-if "ow_skip" in _nav or ("ow_next" in _nav):
-    st.query_params.clear()
-    st.session_state.screen = "interests"; st.rerun()
-if "ow_skip2" in _nav:
-    st.query_params.clear()
-    st.session_state.screen = "discover_prefs"; st.rerun()
-if "ow_back" in _nav:
-    st.query_params.clear()
-    st.session_state.screen = "welcome"; st.rerun()
 
 # ═══════════════════════════════════════════════════════════
 # CSS  — light theme, navy/blue/violet palette
@@ -1704,6 +1707,7 @@ if st.session_state.screen == "welcome":
 if st.session_state.screen == "role_select":
 
     cur_role = st.session_state.get("user_role", None)
+    role_qs = ("&ow_role=" + cur_role) if cur_role else ""
 
     ROLES = [
         ("student",              "🎓", "Student",                   "College or university"),
@@ -1766,7 +1770,7 @@ if st.session_state.screen == "role_select":
           <div style="width:20px;height:5px;border-radius:3px;background:#E2E8F0;"></div>
         </div>
       </div>
-      <a href="?ow_skip=1" target="_self"
+      <a href="?ow_skip=1{role_qs}" target="_self"
             style="font-size:0.83rem;color:#64748B;font-weight:500;padding:5px 14px;
                    border:1.5px solid #E2E8F0;border-radius:20px;background:#fff;cursor:pointer;">Skip</a>
     </div>
@@ -1777,11 +1781,11 @@ if st.session_state.screen == "role_select":
 {cards_html}
   </div>
   <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 0 24px;">
-    <a href="?ow_back=1" target="_self"
+    <a href="?ow_back=1{role_qs}" target="_self"
           style="display:inline-flex;align-items:center;gap:5px;font-size:0.88rem;font-weight:600;
                  color:#475569;padding:9px 20px;border:1.5px solid #E2E8F0;border-radius:22px;
                  background:#fff;cursor:pointer;">← Back</a>
-    <a href="?ow_next=1" target="_self"
+    <a href="?ow_next=1{role_qs}" target="_self"
           style="display:inline-flex;align-items:center;gap:5px;font-size:0.88rem;font-weight:600;
                  color:#fff;padding:9px 22px;border-radius:22px;background:#3B5FEF;cursor:pointer;">
       Continue →</a>
