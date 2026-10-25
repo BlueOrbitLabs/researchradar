@@ -2145,12 +2145,12 @@ html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) > [data-test
 
 /* ── Sidebar brand ────────────────────────────────────────────────────── */
 .ow-brand {
-  display: flex; align-items: center; gap: 10px;
-  padding: 4px 8px 15px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 4px 8px; margin-bottom: 4px;
   border-bottom: 1px solid var(--divider);
 }
 .ow-brand img { width: 22px; height: 22px; border-radius: 6px; display: block; }
-.ow-brand-name { font-size: 0.95rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.ow-brand-name { font-size: 0.9rem; font-weight: 700; color: var(--navy); letter-spacing: -0.02em; }
 .ow-sb-label {
   font-size: 0.62rem; font-weight: 700; color: var(--meta);
   text-transform: uppercase; letter-spacing: 0.09em;
