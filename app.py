@@ -3817,7 +3817,7 @@ with main_col:
   # ── DAILY BRIEFING tab ──
   elif cur_tab == "briefing":
     today_long = datetime.now().strftime("%A, %d %B %Y")
-    st.markdown(f'<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">{today_long} · Personalised for your topics</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="color:var(--muted);font-size:0.85rem;margin-bottom:16px">{today_long} · Personalised for your topics</div>', unsafe_allow_html=True)
 
     briefing_tab = cq.briefing_articles(feed_pool, limit=12,
                                        preferences=_user_preferences(),
@@ -3828,40 +3828,67 @@ with main_col:
     else:
         st.markdown(f'''
         <div class="ow-briefing">
-          <div class="ow-briefing-date">{today_long}</div>
-          <div class="ow-briefing-h">📰 Recent Developments</div>
-          <div class="ow-briefing-sub" style="margin-bottom:10px">{briefing_tab["total"]} eligible articles from {briefing_tab["publishers"]} publishers in the last {briefing_tab["window_days"]} days</div>
-          {"".join([f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.92) !important;text-decoration:underline">{a["title"][:95]}</a></div>' for a in top_arts[:5]])}
+          <div class="ow-briefing-left">
+            <div class="ow-briefing-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true">
+                <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/>
+              </svg>
+            </div>
+            <div class="ow-briefing-text">
+              <div class="ow-briefing-kicker">Daily briefing</div>
+              <div class="ow-briefing-h">Recent developments</div>
+              <div class="ow-briefing-sub">{briefing_tab["total"]} eligible articles from {briefing_tab["publishers"]} publishers in the last {briefing_tab["window_days"]} days</div>
+            </div>
+          </div>
         </div>''', unsafe_allow_html=True)
 
         for i, art in enumerate(top_arts[:10]):
             rel = art.get("relevance", 0)
-            rel_badge = ""
             label = cq.relevance_label(rel)
+            rel_badge = ""
             if label == "high":
-                rel_badge = '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">●● High match</span>'
+                rel_badge = '<span class="ow-card-badge high">High match</span>'
             elif label == "relevant":
-                rel_badge = '<span style="background:#fff8e1;color:#e65100;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">● Relevant</span>'
+                rel_badge = '<span class="ow-card-badge relevant">Relevant</span>'
+            source = _clean_text(art.get("source")) or "Unknown source"
+            date_lbl = _date_label(art.get("date"))
+            title = _clean_text(art.get("title"), 180)
+            summary = _clean_text(art.get("summary"), 250)
+            group_count = art.get("_group_count", 1)
+            group_sources = art.get("_group_sources", [])
+            extra_sources = ""
+            if group_count > 1:
+                extra = [s for s in group_sources if s and s != source][:3]
+                if extra:
+                    extra_sources = f'<div style="font-size:0.6rem;color:var(--meta);margin-top:2px;">Also covered by: {", ".join(_html.escape(s) for s in extra)}</div>'
             st.markdown(f'''
             <div class="ow-art-card">
-              <div class="ow-art-source">{art["source"]} · {art.get("date","")}{rel_badge}</div>
-              <a class="ow-art-title" href="{art["url"]}" target="_blank">{art["title"][:120]}</a>
-              <div class="ow-art-summary">{art.get("summary","")[:200]}</div>
+              <div class="ow-card-meta">
+                <span class="ow-card-publisher">{_html.escape(source)}</span>
+                <span class="ow-card-date">· {_html.escape(date_lbl)}</span>
+                {rel_badge}
+              </div>
+              <a class="ow-card-title" href="{_html.escape(art.get("url","#"), quote=True)}"
+                 target="_blank" rel="noopener noreferrer">{_html.escape(title)}</a>
+              {f'<div class="ow-card-summary">{_html.escape(summary)}</div>' if summary else ''}
+              {extra_sources}
             </div>''', unsafe_allow_html=True)
 
         st.markdown("---")
-        if st.button("🤖 Generate AI briefing for today", type="primary", key="gen_briefing_btn"):
+        if st.button("Generate AI briefing", type="primary", key="gen_briefing_btn",
+                     icon=":material/auto_awesome:"): 
             with st.spinner("Generating your personalised briefing…"):
                 briefing_text = _openai_call(build_briefing_prompt(top_arts), mode="Digest")
             st.session_state.briefing = _ai_display(briefing_text)
             st.rerun()
 
         if st.session_state.get("briefing"):
-            with st.expander("🤖 AI Briefing", expanded=True):
+            with st.expander("AI Briefing", expanded=True):
                 st.markdown(st.session_state.briefing)
                 if st.button("Clear briefing", key="clear_briefing_btn"):
                     st.session_state.briefing = None
                     st.rerun()
+
 
   # ── ALERTS tab ──
   elif cur_tab == "alerts":
