@@ -2307,27 +2307,57 @@ def _user_role():
     """Onboarding profile — a soft ranking signal, never a filter."""
     return st.session_state.get("user_role")
 
+def _reading_profile():
+    """Derive a lightweight reading profile from saved + library articles."""
+    topics = {}
+    sources = {}
+    for bm in st.session_state.get("bookmarks", []):
+        a = bm.get("article", {})
+        t = a.get("topic"); src = a.get("source")
+        if t: topics[t] = topics.get(t, 0) + 1
+        if src: sources[src] = sources.get(src, 0) + 1
+    for a in st.session_state.get("library", []):
+        t = a.get("topic"); src = a.get("source")
+        if t: topics[t] = topics.get(t, 0) + 1
+        if src: sources[src] = sources.get(src, 0) + 1
+    # Read articles (URLs) — credit their source/topic via library lookup
+    read_urls = st.session_state.get("read_articles") or set()
+    for a in st.session_state.get("library", []):
+        if a.get("url") in read_urls:
+            t = a.get("topic"); src = a.get("source")
+            if t: topics[t] = topics.get(t, 0) + 1
+            if src: sources[src] = sources.get(src, 0) + 1
+    return {"topics": topics, "sources": sources}
+
 def _rank_for_you(pool, topics, subtopics):
     return fs.rank_for_you(pool, topics, subtopics,
                            preferences=_user_preferences(),
-                           role=_user_role())
+                           role=_user_role(),
+                           reading_profile=_reading_profile(),
+                           followed_sources=st.session_state.get("followed_sources") or set())
 
 def _rank_my_fields(pool, topics, subtopics, filter_topic=None):
     return fs.rank_my_fields(pool, topics, subtopics,
                              preferences=_user_preferences(),
                              role=_user_role(),
-                             filter_topic=filter_topic)
+                             filter_topic=filter_topic,
+                             reading_profile=_reading_profile(),
+                             followed_sources=st.session_state.get("followed_sources") or set())
 
 def _rank_emerging(pool, topics, subtopics):
     return fs.rank_emerging(pool, topics, subtopics,
                             preferences=_user_preferences(),
-                            role=_user_role())
+                            role=_user_role(),
+                            reading_profile=_reading_profile(),
+                            followed_sources=st.session_state.get("followed_sources") or set())
 
 def _rank_broaden(pool, topics, subtopics):
     return fs.rank_broaden(pool, topics, subtopics,
                            preferences=_user_preferences(),
                            role=_user_role(),
-                           outside_topics=st.session_state.get("feed_discovery_topics") or [])
+                           outside_topics=st.session_state.get("feed_discovery_topics") or [],
+                           reading_profile=_reading_profile(),
+                           followed_sources=st.session_state.get("followed_sources") or set())
 
 def check_ai_available():
     try: OpenAI(api_key=OPENAI_KEY); return True, ""
@@ -3287,13 +3317,19 @@ with main_col:
     results = st.session_state.get("discover_results", [])
     if results:
         st.markdown(f"**{len(results)} sources found** for *{st.session_state.discover_domain}*")
-        # Filter tabs
+        # Rank by relevance to the user's interests; surface reasons.
+        recs = fs.recommend_sources(results, all_t, _user_preferences(),
+                                    st.session_state.get("followed_sources") or set())
         types_found = sorted(set(s["source_type"] for s in results))
         type_filter = st.selectbox("Filter by type", ["All"] + [t.capitalize() for t in types_found], key="disc_type_filter")
 
-        for src in results:
-            if type_filter != "All" and src["source_type"].capitalize() != type_filter:
-                continue
+        shown = recs if not type_filter or type_filter == "All" else [
+            s for s in recs if s["source_type"].capitalize() == type_filter]
+        if not shown:
+            shown = [s for s in results
+                     if type_filter == "All" or s["source_type"].capitalize() == type_filter]
+
+        for src in shown:
             key = src.get("feed_url") or src.get("homepage_url") or src["name"]
             is_followed = key in st.session_state.followed_sources
             feed_ok = src.get("feed_status") == "active"
@@ -3301,6 +3337,8 @@ with main_col:
             ico = SOURCE_TYPE_ICONS.get(src["source_type"], "📄")
 
             with st.expander(f"{ico} **{src['name']}** — {src['source_type'].capitalize()}", expanded=False):
+                if src.get("_reason"):
+                    st.caption(src["_reason"])
                 if src.get("description"):
                     st.markdown(f"*{src['description']}*")
                 c1, c2, c3 = st.columns([2, 2, 1])
@@ -3901,6 +3939,15 @@ with main_col:
                         ]
                         _navigate("ask")
                         st.rerun()
+
+                    # Follow the article's source — soft influence on future ranking.
+                    _src_name = source
+                    if _src_name and _src_name not in st.session_state.followed_sources:
+                        if st.button("Follow source", key=f"follow-{ak}",
+                                     icon=":material/rss_feed:",
+                                     help=f"Follow {_src_name} for more like this"):
+                            st.session_state.followed_sources.add(_src_name)
+                            st.rerun()
 
                 # Inline AI result — revealed on demand, cached in session state.
                 ir_key = f"inline_result_{ak}"

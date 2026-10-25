@@ -493,10 +493,35 @@ def _subtopic_for(article, subtopics_by_topic):
     return subtopic_match(article, (subtopics_by_topic or {}).get(topic) or [])
 
 
+def _personalisation_boost(article, reading_profile, followed_sources):
+    """Soft, capped boost from reading history and followed sources.
+
+    Returns a value in [0, 0.15] so personalisation nudges rather than
+    dominates — a followed source or a repeatedly-read topic rises modestly,
+    but the feed cannot be captured by a single source or interest.
+    """
+    boost = 0.0
+    rp = reading_profile or {}
+    topics = (rp.get("topics") or {}) if isinstance(rp, dict) else {}
+    sources = (rp.get("sources") or {}) if isinstance(rp, dict) else {}
+    art_topic = (article.get("topic") or "").strip()
+    art_source = (article.get("source") or "").strip()
+    if art_topic and art_topic in topics:
+        affinity = min(1.0, topics[art_topic] / 5.0)
+        boost += 0.08 * affinity
+    if art_source and art_source in sources:
+        affinity = min(1.0, sources[art_source] / 5.0)
+        boost += 0.05 * affinity
+    if followed_sources and art_source in (followed_sources or set()):
+        boost += 0.04
+    return min(0.15, boost)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Feed A — For You
 # ─────────────────────────────────────────────────────────────────────────────
-def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None):
+def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
+                 reading_profile=None, followed_sources=None):
     """Balanced feed: relevance + preference fit + recency, plus discovery slots.
 
     Articles from outside the user's interests are included but scored with a
@@ -522,7 +547,8 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None)
             "quality": source_quality(article),
             "profile": profile_affinity(article, role),
         }
-        score = _weighted(features, cfg)
+        score = (_weighted(features, cfg)
+                + _personalisation_boost(article, reading_profile, followed_sources))
         outside = bool(user_topics) and (article.get("topic") or "") not in user_topics
         if outside:
             if not is_current_discovery(article):
@@ -555,7 +581,8 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None)
 # Feed B — My Fields
 # ─────────────────────────────────────────────────────────────────────────────
 def rank_my_fields(pool, topics, subtopics, preferences=(), role=None,
-                   filter_topic=None, today=None):
+                   filter_topic=None, today=None, reading_profile=None,
+                   followed_sources=None):
     """Interest-faithful feed; optionally restricted to a single interest."""
     cfg = CONFIG["my_fields"]
     user_topics = set(topics or [])
@@ -574,7 +601,9 @@ def rank_my_fields(pool, topics, subtopics, preferences=(), role=None,
             "quality": source_quality(article),
             "profile": profile_affinity(article, role),
         }
-        scored.append((_weighted(features, cfg), article))
+        scored.append((_weighted(features, cfg)
+                       + _personalisation_boost(article, reading_profile, followed_sources),
+                      article))
     scored.sort(key=lambda pair: pair[0], reverse=True)
 
     topic_cap = (cfg["max_per_topic_filtered"]
@@ -632,7 +661,8 @@ def corroboration_scores(articles):
     return scores
 
 
-def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None):
+def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None,
+                 reading_profile=None, followed_sources=None):
     """Recent developments ranked by recency, corroboration and source quality.
 
     Distinct from My Fields: freshness dominates, items independently reported
@@ -661,7 +691,8 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
             "relevance": _relevance(article),
             "preference": preference_match(article, preferences),
         }
-        score = _weighted(features, cfg)
+        score = (_weighted(features, cfg)
+                + _personalisation_boost(article, reading_profile, followed_sources))
         if user_topics and (article.get("topic") or "") in user_topics:
             score += cfg["interest_bonus"]
         scored.append((score, article))
@@ -678,7 +709,8 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
 # Feed D — Broaden My Knowledge
 # ─────────────────────────────────────────────────────────────────────────────
 def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
-                 outside_topics=None, today=None):
+                 outside_topics=(), today=None, reading_profile=None,
+                 followed_sources=None):
     """High-quality material from outside the user's primary interests.
 
     ``outside_topics`` lets the caller name topics retrieved purely for
@@ -705,7 +737,8 @@ def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
             "preference": preference_match(article, preferences),
             "relevance": _relevance(article),
         }
-        value = _weighted(features, cfg)
+        value = (_weighted(features, cfg)
+                + _personalisation_boost(article, reading_profile, followed_sources))
         # Accessible formats are preferable when broadening.
         if infer_content_type(article) in ("explainer", "research"):
             value += 0.05
@@ -808,3 +841,63 @@ def search_articles(articles, query):
     return [a for a in (articles or [])
             if needle in (a.get("title") or "").lower()
             or needle in (a.get("summary") or "").lower()]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Source recommendations — score candidate sources for a user.
+# ─────────────────────────────────────────────────────────────────────────────
+def score_source(source, user_topics, user_preferences=(), followed_sources=()):
+    """Score a discovered source (0..1) for a given user.
+
+    Uses topic overlap, source-type credibility and whether it is already
+    followed. Returns a dict with score + a short reason string so the UI can
+    explain why the source is recommended.
+    """
+    name = (source.get("name") or "").strip()
+    topics = set(source.get("topics") or [])
+    user_topics = set(user_topics or [])
+    overlap = topics & user_topics
+    overlap_ratio = len(overlap) / max(1, len(user_topics)) if user_topics else 0.0
+
+    source_type = (source.get("source_type") or "").lower()
+    type_bonus = {
+        "journal": 0.15, "publication": 0.12, "institution": 0.10,
+        "government": 0.12, "research": 0.12, "news": 0.05,
+    }.get(source_type, 0.03)
+
+    feed_bonus = 0.10 if source.get("feed_status") == "active" else 0.0
+    followed_penalty = 0.30 if (name in (followed_sources or set())
+                                or source.get("feed_url") in (followed_sources or set())) else 0.0
+
+    score = min(1.0, 0.40 * overlap_ratio + type_bonus + feed_bonus
+                - followed_penalty + 0.05 * len(user_preferences or []))
+
+    if overlap:
+        reason = "Covers " + ", ".join(sorted(overlap)[:2])
+    elif topics:
+        reason = "Related to " + ", ".join(sorted(topics)[:2])
+    else:
+        reason = "Potentially useful source"
+    if source.get("feed_status") == "active":
+        reason += " · live feed"
+    return {"score": round(score, 3), "reason": reason}
+
+
+def recommend_sources(sources, user_topics, user_preferences=(), followed_sources=(),
+                      limit=12):
+    """Rank a list of discovered sources for a user, excluding already-followed."""
+    scored = []
+    for s in (sources or []):
+        key = s.get("feed_url") or s.get("homepage_url") or s.get("name")
+        if key in (followed_sources or set()):
+            continue
+        res = score_source(s, user_topics, user_preferences, followed_sources)
+        scored.append((res["score"], res["reason"], s))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    out = []
+    for score, reason, src in scored[:limit]:
+        item = dict(src)
+        item["_score"] = score
+        item["_reason"] = reason
+        out.append(item)
+    return out
