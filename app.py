@@ -2154,7 +2154,8 @@ html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) > [data-test
 .ow-sb-label {
   font-size: 0.62rem; font-weight: 700; color: var(--meta);
   text-transform: uppercase; letter-spacing: 0.09em;
-  margin: 6px 9px 2px;
+  line-height: 14px;
+  margin: 6px 9px 6px;
 }
 
 /* Reduce nav container gap */
