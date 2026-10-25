@@ -614,8 +614,13 @@ def rank_my_fields(pool, topics, subtopics, preferences=(), role=None,
     """Interest-faithful feed; optionally restricted to a single interest."""
     cfg = CONFIG["my_fields"]
     user_topics = set(topics or [])
-    candidates = [a for a in _eligible(pool, cfg["min_relevance"])
-                  if not user_topics or (a.get("topic") or "") in user_topics]
+    has_gk = "General knowledge beyond my usual interests" in (preferences or [])
+    if has_gk:
+        # Include cross-topic articles (they'll be scored with the GK boost).
+        candidates = list(_eligible(pool, cfg["min_relevance"]))
+    else:
+        candidates = [a for a in _eligible(pool, cfg["min_relevance"])
+                      if not user_topics or (a.get("topic") or "") in user_topics]
     if filter_topic and filter_topic != "All":
         candidates = [a for a in candidates if (a.get("topic") or "") == filter_topic]
 
@@ -881,7 +886,7 @@ def search_articles(articles, query):
 # Source type -> content types it typically carries.
 SOURCE_TYPE_CONTENT = {
     "journal": {"research"}, "repository": {"research"},
-    "institution": {"research", "policy", "organisation"},
+    "institution": {"policy", "organisation"},
     "government": {"policy", "news"}, "research": {"research"},
     "news": {"news", "industry"}, "publication": {"research", "news"},
     "organisation": {"policy", "industry", "organisation"},
@@ -920,13 +925,13 @@ def score_source(source, user_topics, user_preferences=(), followed_sources=()):
     src_cts = SOURCE_TYPE_CONTENT.get(source_type, set())
     # Also infer from topics matching preference keywords.
     pref_overlap = pref_cts & src_cts
-    pref_bonus = 0.12 * (len(pref_overlap) / max(1, len(pref_cts))) if pref_cts else 0.0
+    pref_bonus = 0.25 * (len(pref_overlap) / max(1, len(pref_cts))) if pref_cts else 0.0
 
     feed_bonus = 0.10 if source.get("feed_status") == "active" else 0.0
     followed_penalty = 0.30 if (name in (followed_sources or set())
                                 or source.get("feed_url") in (followed_sources or set())) else 0.0
 
-    score = min(1.0, 0.35 * overlap_ratio + type_bonus + feed_bonus
+    score = min(1.0, 0.30 * overlap_ratio + type_bonus + feed_bonus
                 + pref_bonus - followed_penalty)
 
     # Reason combines topic overlap + preference alignment.

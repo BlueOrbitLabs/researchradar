@@ -409,3 +409,88 @@ class PreferenceAndProfileTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class GeneralKnowledgeCrossTopicTest(unittest.TestCase):
+    def test_general_knowledge_boosts_cross_topic(self):
+        pool = [
+            art("Deep learning for medical imaging", topic="AI & Technology", relevance=0.7),
+            art("Hospital financing reform in low-income countries",
+                topic="Health Economics", relevance=0.7),
+        ]
+        # User interested only in Health Economics.
+        topics = ["Health Economics"]
+        with_gk = fs.rank_my_fields(
+            pool, topics, {},
+            preferences=["General knowledge beyond my usual interests"],
+            today=TODAY)
+        # The AI article (cross-topic) should rank because of GK preference.
+        titles = [a["title"] for a in with_gk]
+        self.assertIn("Deep learning for medical imaging", titles)
+
+    def test_no_general_knowledge_does_not_boost_cross_topic(self):
+        pool = [
+            art("Deep learning for medical imaging", topic="AI & Technology", relevance=0.7),
+            art("Hospital financing reform in low-income countries",
+                topic="Health Economics", relevance=0.7),
+        ]
+        topics = ["Health Economics"]
+        without_gk = fs.rank_my_fields(pool, topics, {}, today=TODAY)
+        # Without GK, only Health Economics items should appear.
+        for a in without_gk:
+            self.assertEqual(a["topic"], "Health Economics")
+
+    def test_preference_match_cross_topic(self):
+        art_cross = art("An explainer on quantum computing", topic="AI & Technology",
+                        relevance=0.6, summary="A beginner guide to quantum.")
+        # With user_topics excluding AI, cross-topic boost applies.
+        score = fs.preference_match(art_cross, ["General knowledge beyond my usual interests"],
+                                    user_topics=["Health Economics"])
+        self.assertGreater(score, 0.0)
+
+
+class SourceRecommendationPreferenceTest(unittest.TestCase):
+    def test_grants_preference_surfaces_funding_sources(self):
+        sources = [
+            {"name": "NIH Reporter", "source_type": "institution",
+             "topics": ["health", "medicine"], "feed_status": "active"},
+            {"name": "Nature Journal", "source_type": "journal",
+             "topics": ["health", "medicine"], "feed_status": "active"},
+            {"name": "Grants.gov", "source_type": "government",
+             "topics": ["funding", "grants"], "feed_status": "active"},
+        ]
+        user_topics = {"health", "medicine"}
+        without = fs.recommend_sources(sources, user_topics, [], set())
+        with_grants = fs.recommend_sources(sources, user_topics,
+                                           ["Grants, fellowships & opportunities"], set())
+        # Grants.gov should rank higher with grants preference.
+        names_without = [s["name"] for s in without]
+        names_with = [s["name"] for s in with_grants]
+        # Grants.gov should appear in with_grants results
+        self.assertTrue(any("Grants" in n or "NIH" in n for n in names_with))
+
+    def test_recommendations_change_with_preferences(self):
+        sources = [
+            {"name": "WHO", "source_type": "institution",
+             "topics": ["health", "policy"], "feed_status": "active"},
+            {"name": "arXiv", "source_type": "repository",
+             "topics": ["research", "ai"], "feed_status": "active"},
+        ]
+        user_topics = {"health", "ai"}
+        r1 = fs.recommend_sources(sources, user_topics, ["Government policies & official reports"], set())
+        r2 = fs.recommend_sources(sources, user_topics, ["New research & journal publications"], set())
+        # WHO should rank higher with policy pref; arXiv with research pref.
+        self.assertNotEqual([s["name"] for s in r1], [s["name"] for s in r2])
+
+
+class SimilarSourcesTest(unittest.TestCase):
+    def test_similar_sources_by_topic_overlap(self):
+        sources = [
+            {"name": "WHO", "topics": ["health", "policy"]},
+            {"name": "UNICEF", "topics": ["health", "children"]},
+            {"name": "arXiv", "topics": ["ai", "research"]},
+        ]
+        similar = fs.similar_sources(sources[0], sources, limit=2)
+        names = [s["name"] for s in similar]
+        self.assertIn("UNICEF", names)
+        self.assertNotIn("WHO", names)

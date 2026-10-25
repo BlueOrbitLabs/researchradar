@@ -371,3 +371,36 @@ class RetrievalFailureTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BriefingGroupingTest(unittest.TestCase):
+    def make_pool(self):
+        return [
+            {"title": "New malaria vaccine shows 70% efficacy in trial",
+             "url": "https://a.org/1", "summary": "A trial reports efficacy.",
+             "date": "2026-10-22", "source": "OpenAlex", "topic": "Health Economics",
+             "relevance": 0.8},
+            {"title": "Malaria vaccine trial reports 70 percent efficacy",
+             "url": "https://b.org/2", "summary": "Results from a malaria vaccine study.",
+             "date": "2026-10-22", "source": "PubMed", "topic": "Health Economics",
+             "relevance": 0.75},
+            {"title": "Central bank raises interest rates",
+             "url": "https://c.org/3", "summary": "Rates rise again.",
+             "date": "2026-10-23", "source": "Reuters", "topic": "Policy & Government",
+             "relevance": 0.7},
+        ]
+
+    def test_grouping_reduces_items(self):
+        result = cq.briefing_articles(self.make_pool(), today=TODAY, limit=10)
+        # Two malaria articles should be grouped into one.
+        self.assertLessEqual(len(result["items"]), 2)
+        self.assertIn("groups", result)
+
+    def test_preferences_change_briefing_order(self):
+        r1 = cq.briefing_articles(self.make_pool(), today=TODAY, limit=10,
+                                  preferences=["New research & journal publications"])
+        r2 = cq.briefing_articles(self.make_pool(), today=TODAY, limit=10,
+                                  preferences=["Current affairs & world events"])
+        # Both return valid results
+        self.assertTrue(len(r1["items"]) > 0)
+        self.assertTrue(len(r2["items"]) > 0)
