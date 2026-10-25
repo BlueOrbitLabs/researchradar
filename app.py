@@ -2483,6 +2483,22 @@ html:has(.ow-dash) [class*="st-key-art-"] img {
   display: block !important;
 }
 
+/* Overflow menu trigger (more_horiz) */
+html:has(.ow-dash) [class*="st-key-more-"] button {
+  width: 24px !important; min-width: 24px !important; height: 22px !important;
+  min-height: 22px !important; padding: 0 !important;
+  background: transparent !important; border: none !important;
+  border-radius: 6px !important; color: var(--meta) !important;
+  box-shadow: none !important;
+}
+html:has(.ow-dash) [class*="st-key-more-"] button p { display: none !important; }
+html:has(.ow-dash) [class*="st-key-more-"] button [data-testid="stIconMaterial"] {
+  font-size: 16px !important; color: inherit !important;
+}
+html:has(.ow-dash) [class*="st-key-more-"] button:hover {
+  background: var(--soft-blue) !important; color: var(--blue) !important;
+}
+
 /* AI panels stay inside the card */
 html:has(.ow-dash) [data-testid="stExpander"] {
   border: 1px solid var(--divider) !important; border-radius: 10px !important;
@@ -4305,11 +4321,13 @@ with main_col:
                         _navigate("ask")
                         st.rerun()
 
-                # Secondary actions — compact, muted.
-                with st.container(key=f"ow-secondary-{ak}", horizontal=True, gap="small"):
+                # Secondary actions — compact overflow menu.
+                with st.popover("", icon=":material/more_horiz:", key=f"more-{ak}",
+                                help="More actions"):
                     if st.button("Read" if is_read else "Mark read", key=f"rd-{ak}",
                                  icon=":material/check_circle:" if is_read else ":material/visibility:",
-                                 help="Mark as unread" if is_read else "Mark as read"):
+                                 help="Mark as unread" if is_read else "Mark as read",
+                                 use_container_width=True):
                         if is_read:
                             st.session_state.read_articles.discard(url)
                         else:
@@ -4318,20 +4336,23 @@ with main_col:
                         st.rerun()
                     _src_name = source
                     if _src_name and _src_name not in st.session_state.followed_sources:
-                        if st.button("Follow", key=f"follow-{ak}",
+                        if st.button("Follow source", key=f"follow-{ak}",
                                      icon=":material/rss_feed:",
-                                     help=f"Follow {_src_name}"):
+                                     help=f"Follow {_src_name}",
+                                     use_container_width=True):
                             st.session_state.followed_sources.add(_src_name)
                             st.rerun()
                     _fb_key = f"{art.get('topic','')}::{_src_name}"
-                    if st.button("Less", key=f"less-{ak}",
+                    if st.button("Less like this", key=f"less-{ak}",
                                  icon=":material/thumb_down:",
-                                 help="Show fewer like this"):
+                                 help="Show fewer like this",
+                                 use_container_width=True):
                         st.session_state.negative_feedback.add(_fb_key)
                         st.rerun()
                     if st.button("Not relevant", key=f"notrel-{ak}",
                                  icon=":material/block:",
-                                 help="Mark as not relevant"):
+                                 help="Mark as not relevant",
+                                 use_container_width=True):
                         st.session_state.negative_feedback.add(_fb_key)
                         st.rerun()
 
