@@ -1583,6 +1583,7 @@ DEFAULTS = {
     "source_miss_count": {},       # {source_name: consecutive refreshes with 0 articles}
     "recent_sources": set(),       # sources seen in the previous refresh (for novelty)
     "negative_feedback": set(),    # "topic:source" keys the user marked less/not relevant
+    "disabled_subtypes": set(),    # "preference::subtype" keys the user disabled
     "followed_sources": set(),    # set of feed_urls the user has explicitly followed
     "discover_domain": "",        # last domain searched in Discover Sources
     "discover_results": [],       # last discovery results
@@ -3366,10 +3367,29 @@ _discovery_topics = fs.choose_discovery_topics(
     seed=fs.stable_seed(datetime.now().strftime("%Y-%m-%d"),
                         tuple(sorted(_pool_topics))),
 )
+
+# Basket-driven retrieval: generate targeted query terms from the user's
+# selected interests x discovery preferences and add a bounded set as
+# additional discovery topics.
+_basket_queries = set()
+_adapted = fs.adapt_all_baskets(
+    _pool_topics,
+    st.session_state.get("discover_preferences") or [],
+    st.session_state.subtopics,
+    st.session_state.get("user_role"),
+)
+for _ab in _adapted:
+    for _qt in (_ab.get("query_terms") or [])[:2]:
+        if _qt and _qt not in _pool_topics and _qt not in _discovery_topics:
+            _basket_queries.add(_qt)
+# Limit to avoid excessive requests (max 4 extra queries).
+_basket_extra = list(_basket_queries)[:4]
+_discovery_topics = list(_discovery_topics) + _basket_extra
 _pool_key = (
     tuple(_pool_topics),
     tuple(sorted((k, tuple(v or [])) for k, v in _pool_subtopics.items())),
     tuple(_discovery_topics),
+    tuple(_basket_extra),
     tuple(st.session_state.get("discover_preferences") or []),
 )
 # `is None` (not falsy): an empty result is a real answer, so adapters are not
@@ -3502,6 +3522,7 @@ with sidebar_col:
             "General knowledge beyond my usual interests",
         ]
         _cur = st.session_state.get("discover_preferences") or []
+        _disabled_subtypes = st.session_state.get("disabled_subtypes", set())
         for _pn in _PREFS:
             _is = _pn in _cur
             if st.checkbox(_pn, value=_is, key=f"pref_edit_{_pn}"):
@@ -3510,7 +3531,21 @@ with sidebar_col:
             else:
                 if _pn in _cur:
                     _cur.remove(_pn)
+            # Show subtypes for enabled preferences.
+            if _pn in _cur:
+                _basket = fs.get_basket(_pn)
+                if _basket:
+                    with st.expander(f"  subtypes: {_pn[:20]}", expanded=False):
+                        for _st in _basket.get("subtypes", []):
+                            _key = f"{_pn}::{_st}"
+                            _enabled = _key not in _disabled_subtypes
+                            if not st.checkbox(_st, value=_enabled,
+                                               key=f"subtype_{_key[:40]}"):
+                                _disabled_subtypes.add(_key)
+                            else:
+                                _disabled_subtypes.discard(_key)
         st.session_state.discover_preferences = _cur
+        st.session_state.disabled_subtypes = _disabled_subtypes
 
     # Subtopics for the active interest
     with st.expander("Refine subtopics", expanded=bool(subtopics_for_active)):

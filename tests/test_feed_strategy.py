@@ -557,3 +557,41 @@ class DiscoveryBasketTest(unittest.TestCase):
         basket = fs.get_basket("Local news & community updates")
         self.assertTrue(basket.get("local_only"))
         self.assertEqual(basket.get("content_types"), set())
+
+
+class BasketRetrievalTest(unittest.TestCase):
+    def test_adapt_all_baskets_generates_queries(self):
+        interests = ["public health"]
+        prefs = ["Grants, fellowships & opportunities"]
+        adapted = fs.adapt_all_baskets(interests, prefs, {})
+        self.assertTrue(len(adapted) > 0)
+        qterms = adapted[0]["query_terms"]
+        self.assertTrue(any("public health" in q.lower() for q in qterms))
+        self.assertTrue(any("grant" in q.lower() or "fellowship" in q.lower()
+                            for q in qterms))
+
+    def test_different_preferences_different_query_terms(self):
+        interests = ["public health"]
+        a1 = fs.adapt_all_baskets(interests, ["New research & journal publications"], {})
+        a2 = fs.adapt_all_baskets(interests, ["Grants, fellowships & opportunities"], {})
+        terms1 = set(" ".join(a["query_terms"]) for a in a1)
+        terms2 = set(" ".join(a["query_terms"]) for a in a2)
+        # Different preferences should produce different query terms
+        self.assertNotEqual(terms1, terms2)
+
+    def test_different_interests_same_basket(self):
+        prefs = ["New research & journal publications"]
+        a1 = fs.adapt_all_baskets(["public health"], prefs, {})
+        a2 = fs.adapt_all_baskets(["physics"], prefs, {})
+        terms1 = " ".join(" ".join(a["query_terms"]) for a in a1)
+        terms2 = " ".join(" ".join(a["query_terms"]) for a in a2)
+        self.assertIn("public health", terms1.lower())
+        self.assertIn("physics", terms2.lower())
+
+    def test_empty_preferences_returns_empty(self):
+        adapted = fs.adapt_all_baskets(["public health"], [], {})
+        self.assertEqual(adapted, [])
+
+    def test_empty_interests_returns_empty(self):
+        adapted = fs.adapt_all_baskets([], ["New research & journal publications"], {})
+        self.assertEqual(adapted, [])
