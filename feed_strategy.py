@@ -269,17 +269,30 @@ def infer_content_type(article):
     return "news"
 
 
-def preference_match(article, preferences):
-    """Fraction of the user's selected information preferences this item fits."""
+def preference_match(article, preferences, user_topics=None):
+    """Fraction of the user's selected information preferences this item fits.
+
+    When "General knowledge beyond my usual interests" is selected, items
+    whose topic is outside the user's interests get an additional boost so
+    the preference genuinely introduces cross-topic discoveries rather than
+    just matching content types.
+    """
     prefs = [p for p in (preferences or []) if p]
     relevant = [p for p in prefs if PREFERENCE_TYPES.get(p)]
     if not relevant:
         return 0.0
     kind = infer_content_type(article)
     hits = sum(1 for p in relevant if kind in PREFERENCE_TYPES[p])
-    # "General knowledge beyond my usual interests" is satisfied by any item
-    # that is not about one of the user's primary interests.
-    return hits / len(relevant)
+    base = hits / len(relevant)
+
+    # Cross-topic boost for "General knowledge beyond my usual interests".
+    if "General knowledge beyond my usual interests" in relevant:
+        ut = set(user_topics or [])
+        art_topic = (article.get("topic") or "").strip()
+        if ut and art_topic and art_topic not in ut:
+            # Cross-topic: add up to 0.3 (scaled by content quality).
+            base = min(1.0, base + 0.3 * source_quality(article))
+    return base
 
 
 def profile_affinity(article, role):
@@ -499,7 +512,7 @@ def _subtopic_for(article, subtopics_by_topic):
 
 
 def _personalisation_boost(article, reading_profile, followed_sources,
-                           recent_sources=None):
+                           recent_sources=None, negative_feedback=None):
     """Soft, capped boost from reading history and followed sources.
 
     Returns a value in [0, 0.15] so personalisation nudges rather than
@@ -523,14 +536,19 @@ def _personalisation_boost(article, reading_profile, followed_sources,
     # Source-level novelty: penalise sources seen in the recent refresh.
     if recent_sources and art_source in (recent_sources or set()):
         boost -= 0.06
-    return min(0.15, max(-0.10, boost))
+    # Negative feedback penalty.
+    fb_key = f"{art_topic}::{art_source}"
+    if negative_feedback and fb_key in (negative_feedback or set()):
+        boost -= 0.25
+    return min(0.15, max(-0.30, boost))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Feed A — For You
 # ─────────────────────────────────────────────────────────────────────────────
 def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
-                 reading_profile=None, followed_sources=None, recent_sources=None):
+                 reading_profile=None, followed_sources=None, recent_sources=None,
+                 negative_feedback=None):
     """Balanced feed: relevance + preference fit + recency, plus discovery slots.
 
     Articles from outside the user's interests are included but scored with a
@@ -551,13 +569,14 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
         features = {
             "relevance": _relevance(article),
             "subtopic": _subtopic_for(article, subtopics),
-            "preference": preference_match(article, preferences),
+            "preference": preference_match(article, preferences, user_topics),
             "freshness": freshness(article.get("date"), today),
             "quality": source_quality(article),
             "profile": profile_affinity(article, role),
         }
         score = (_weighted(features, cfg)
-                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources))
+                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources,
+                                      negative_feedback))
         outside = bool(user_topics) and (article.get("topic") or "") not in user_topics
         if outside:
             if not is_current_discovery(article):
@@ -605,7 +624,7 @@ def rank_my_fields(pool, topics, subtopics, preferences=(), role=None,
         features = {
             "relevance": _relevance(article),
             "subtopic": _subtopic_for(article, subtopics),
-            "preference": preference_match(article, preferences),
+            "preference": preference_match(article, preferences, user_topics),
             "freshness": freshness(article.get("date"), today),
             "quality": source_quality(article),
             "profile": profile_affinity(article, role),
@@ -671,7 +690,8 @@ def corroboration_scores(articles):
 
 
 def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None,
-                 reading_profile=None, followed_sources=None, recent_sources=None):
+                 reading_profile=None, followed_sources=None, recent_sources=None,
+                 negative_feedback=None):
     """Recent developments ranked by recency, corroboration and source quality.
 
     Distinct from My Fields: freshness dominates, items independently reported
@@ -698,10 +718,11 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
             "corroboration": corroboration.get(id(article), 0.0),
             "quality": source_quality(article),
             "relevance": _relevance(article),
-            "preference": preference_match(article, preferences),
+            "preference": preference_match(article, preferences, user_topics),
         }
         score = (_weighted(features, cfg)
-                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources))
+                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources,
+                                      negative_feedback))
         if user_topics and (article.get("topic") or "") in user_topics:
             score += cfg["interest_bonus"]
         scored.append((score, article))
@@ -719,7 +740,8 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
 # ─────────────────────────────────────────────────────────────────────────────
 def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
                  outside_topics=(), today=None, reading_profile=None,
-                 followed_sources=None, recent_sources=None):
+                 followed_sources=None, recent_sources=None,
+                 negative_feedback=None):
     """High-quality material from outside the user's primary interests.
 
     ``outside_topics`` lets the caller name topics retrieved purely for
@@ -743,11 +765,12 @@ def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
         features = {
             "freshness": freshness(article.get("date"), today),
             "quality": source_quality(article),
-            "preference": preference_match(article, preferences),
+            "preference": preference_match(article, preferences, user_topics),
             "relevance": _relevance(article),
         }
         value = (_weighted(features, cfg)
-                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources))
+                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources,
+                                      negative_feedback))
         # Accessible formats are preferable when broadening.
         if infer_content_type(article) in ("explainer", "research"):
             value += 0.05
@@ -855,12 +878,29 @@ def search_articles(articles, query):
 # ─────────────────────────────────────────────────────────────────────────────
 # Source recommendations — score candidate sources for a user.
 # ─────────────────────────────────────────────────────────────────────────────
+# Source type -> content types it typically carries.
+SOURCE_TYPE_CONTENT = {
+    "journal": {"research"}, "repository": {"research"},
+    "institution": {"research", "policy", "organisation"},
+    "government": {"policy", "news"}, "research": {"research"},
+    "news": {"news", "industry"}, "publication": {"research", "news"},
+    "organisation": {"policy", "industry", "organisation"},
+}
+
+# Preference -> content types (reused from PREFERENCE_TYPES).
+def _pref_content_types(preferences):
+    cts = set()
+    for p in (preferences or []):
+        cts |= PREFERENCE_TYPES.get(p, set())
+    return cts
+
 def score_source(source, user_topics, user_preferences=(), followed_sources=()):
     """Score a discovered source (0..1) for a given user.
 
-    Uses topic overlap, source-type credibility and whether it is already
-    followed. Returns a dict with score + a short reason string so the UI can
-    explain why the source is recommended.
+    Considers three signals:
+      1. User interests/subtopics (topic overlap).
+      2. Selected discovery preferences (content-type alignment).
+      3. Source credibility (type bonus + live feed) and followed penalty.
     """
     name = (source.get("name") or "").strip()
     topics = set(source.get("topics") or [])
@@ -874,15 +914,29 @@ def score_source(source, user_topics, user_preferences=(), followed_sources=()):
         "government": 0.12, "research": 0.12, "news": 0.05,
     }.get(source_type, 0.03)
 
+    # Preference alignment: does this source's typical content match the
+    # user's discovery preferences?
+    pref_cts = _pref_content_types(user_preferences)
+    src_cts = SOURCE_TYPE_CONTENT.get(source_type, set())
+    # Also infer from topics matching preference keywords.
+    pref_overlap = pref_cts & src_cts
+    pref_bonus = 0.12 * (len(pref_overlap) / max(1, len(pref_cts))) if pref_cts else 0.0
+
     feed_bonus = 0.10 if source.get("feed_status") == "active" else 0.0
     followed_penalty = 0.30 if (name in (followed_sources or set())
                                 or source.get("feed_url") in (followed_sources or set())) else 0.0
 
-    score = min(1.0, 0.40 * overlap_ratio + type_bonus + feed_bonus
-                - followed_penalty + 0.05 * len(user_preferences or []))
+    score = min(1.0, 0.35 * overlap_ratio + type_bonus + feed_bonus
+                + pref_bonus - followed_penalty)
 
-    if overlap:
+    # Reason combines topic overlap + preference alignment.
+    if overlap and pref_overlap:
+        reason = ("Covers " + ", ".join(sorted(overlap)[:2]) +
+                  " · matches " + ", ".join(sorted(pref_overlap)[:2]))
+    elif overlap:
         reason = "Covers " + ", ".join(sorted(overlap)[:2])
+    elif pref_overlap:
+        reason = "Matches " + ", ".join(sorted(pref_overlap)[:2])
     elif topics:
         reason = "Related to " + ", ".join(sorted(topics)[:2])
     else:

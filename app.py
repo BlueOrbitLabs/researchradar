@@ -1582,6 +1582,7 @@ DEFAULTS = {
     "source_last_seen": {},       # {source_name: "YYYY-MM-DD"} last refresh with articles
     "source_miss_count": {},       # {source_name: consecutive refreshes with 0 articles}
     "recent_sources": set(),       # sources seen in the previous refresh (for novelty)
+    "negative_feedback": set(),    # "topic:source" keys the user marked less/not relevant
     "followed_sources": set(),    # set of feed_urls the user has explicitly followed
     "discover_domain": "",        # last domain searched in Discover Sources
     "discover_results": [],       # last discovery results
@@ -2558,7 +2559,8 @@ def _rank_for_you(pool, topics, subtopics):
                            role=_user_role(),
                            reading_profile=_reading_profile(),
                            followed_sources=st.session_state.get("followed_sources") or set(),
-                           recent_sources=st.session_state.get("recent_sources") or set())
+                           recent_sources=st.session_state.get("recent_sources") or set(),
+                           negative_feedback=st.session_state.get("negative_feedback") or set())
 
 def _rank_my_fields(pool, topics, subtopics, filter_topic=None):
     return fs.rank_my_fields(pool, topics, subtopics,
@@ -2567,7 +2569,8 @@ def _rank_my_fields(pool, topics, subtopics, filter_topic=None):
                              filter_topic=filter_topic,
                              reading_profile=_reading_profile(),
                              followed_sources=st.session_state.get("followed_sources") or set(),
-                             recent_sources=st.session_state.get("recent_sources") or set())
+                             recent_sources=st.session_state.get("recent_sources") or set(),
+                           negative_feedback=st.session_state.get("negative_feedback") or set())
 
 def _rank_emerging(pool, topics, subtopics):
     return fs.rank_emerging(pool, topics, subtopics,
@@ -2575,7 +2578,8 @@ def _rank_emerging(pool, topics, subtopics):
                             role=_user_role(),
                             reading_profile=_reading_profile(),
                             followed_sources=st.session_state.get("followed_sources") or set(),
-                            recent_sources=st.session_state.get("recent_sources") or set())
+                            recent_sources=st.session_state.get("recent_sources") or set(),
+                           negative_feedback=st.session_state.get("negative_feedback") or set())
 
 def _rank_broaden(pool, topics, subtopics):
     return fs.rank_broaden(pool, topics, subtopics,
@@ -2584,7 +2588,8 @@ def _rank_broaden(pool, topics, subtopics):
                            outside_topics=st.session_state.get("feed_discovery_topics") or [],
                            reading_profile=_reading_profile(),
                            followed_sources=st.session_state.get("followed_sources") or set(),
-                           recent_sources=st.session_state.get("recent_sources") or set())
+                           recent_sources=st.session_state.get("recent_sources") or set(),
+                           negative_feedback=st.session_state.get("negative_feedback") or set())
 
 def check_ai_available():
     try: OpenAI(api_key=OPENAI_KEY); return True, ""
@@ -3471,6 +3476,31 @@ with sidebar_col:
                  use_container_width=True):
         st.session_state.screen = "interests"; st.rerun()
 
+    # Quick preference editor — refine discovery preferences without re-onboarding.
+    with st.expander("Discovery preferences", expanded=False):
+        _PREFS = [
+            "New research & journal publications",
+            "Emerging trends & breakthroughs",
+            "Current affairs & world events",
+            "Government policies & official reports",
+            "Industry & professional developments",
+            "Grants, fellowships & opportunities",
+            "Organisations & institutions",
+            "Exam-relevant current affairs",
+            "Practical explainers & background knowledge",
+            "General knowledge beyond my usual interests",
+        ]
+        _cur = st.session_state.get("discover_preferences") or []
+        for _pn in _PREFS:
+            _is = _pn in _cur
+            if st.checkbox(_pn, value=_is, key=f"pref_edit_{_pn}"):
+                if _pn not in _cur:
+                    _cur.append(_pn)
+            else:
+                if _pn in _cur:
+                    _cur.remove(_pn)
+        st.session_state.discover_preferences = _cur
+
     # Subtopics for the active interest
     with st.expander("Refine subtopics", expanded=bool(subtopics_for_active)):
         cur_subs = st.session_state.subtopics.get(active, [])
@@ -4210,6 +4240,19 @@ with main_col:
                                      help=f"Follow {_src_name} for more like this"):
                             st.session_state.followed_sources.add(_src_name)
                             st.rerun()
+
+                    # Lightweight feedback — "Less like this" / "Not relevant".
+                    _fb_key = f"{art.get('topic','')}::{_src_name}"
+                    if st.button("Less like this", key=f"less-{ak}",
+                                 icon=":material/thumb_down:",
+                                 help="Show fewer like this"):
+                        st.session_state.negative_feedback.add(_fb_key)
+                        st.rerun()
+                    if st.button("Not relevant", key=f"notrel-{ak}",
+                                 icon=":material/block:",
+                                 help="Mark as not relevant"):
+                        st.session_state.negative_feedback.add(_fb_key)
+                        st.rerun()
 
                 # Inline AI result — revealed on demand, cached in session state.
                 ir_key = f"inline_result_{ak}"

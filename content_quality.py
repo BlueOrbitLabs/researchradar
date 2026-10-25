@@ -604,12 +604,45 @@ def briefing_articles(pool, days=None, limit=3, today=None, preferences=None, ro
         seen.add(key)
         eligible.append(article)
 
-    # Preference/role-aware re-ranking: boost items matching the user's discovery
-    # preferences and role, but keep relevance+freshness as the base signal.
+    # Group repetitive coverage: articles with substantially overlapping
+    # distinctive title tokens are the same story.
+    def _title_tokens(a):
+        text = (a.get("title") or "").lower()
+        words = set(re.findall(r"[a-z]{4,}", text))
+        return words - {"this", "that", "with", "from", "about", "into",
+                        "their", "have", "will", "more", "most", "study"}
+
+    groups = []
+    for a in eligible:
+        toks = _title_tokens(a)
+        matched = None
+        for g in groups:
+            inter = toks & g["tokens"]
+            union = toks | g["tokens"]
+            if len(inter) >= 3 and (len(inter) / max(1, len(union))) >= 0.35:
+                matched = g
+                break
+        if matched:
+            matched["items"].append(a)
+            matched["tokens"] |= toks
+        else:
+            groups.append({"tokens": set(toks), "items": [a]})
+
+    # Pick representative per group (highest relevance, then freshest).
+    grouped_items = []
+    for g in groups:
+        reps = sorted(g["items"], key=lambda a: (float(a.get("relevance") or 0),
+                                                 parse_date(a.get("date")) or date.min),
+                      reverse=True)
+        rep = dict(reps[0])
+        rep["_group_sources"] = [x.get("source") for x in g["items"] if x.get("source")]
+        rep["_group_count"] = len(g["items"])
+        grouped_items.append(rep)
+
+    # Preference/role-aware re-ranking on top of relevance+freshness.
     if preferences or role:
         def _brief_score(a):
             base = float(a.get("relevance") or 0)
-            # preference_match is in feed_strategy; import lazily to avoid cycle.
             try:
                 import feed_strategy as _fs
                 pref = _fs.preference_match(a, preferences or [])
@@ -617,19 +650,21 @@ def briefing_articles(pool, days=None, limit=3, today=None, preferences=None, ro
             except Exception:
                 pref = 0.0; prof = 0.0
             return base + 0.15 * pref + 0.10 * prof
-        eligible.sort(key=_brief_score, reverse=True)
+        grouped_items.sort(key=_brief_score, reverse=True)
     else:
-        eligible.sort(
+        grouped_items.sort(
             key=lambda a: (float(a.get("relevance") or 0),
                            parse_date(a.get("date")) or date.min),
             reverse=True,
         )
+
     return {
-        "items": eligible[:limit],
+        "items": grouped_items[:limit],
         "total": len(eligible),
         "publishers": len({publisher(a) for a in eligible if publisher(a)}),
         "window_days": days,
         "rejected": rejected,
+        "groups": len(groups),
     }
 
 
