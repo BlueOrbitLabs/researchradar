@@ -2126,7 +2126,7 @@ html:has(.ow-dash) [data-testid="stHorizontalBlock"]:has(.ow-sidebar-marker) {
   gap: 0 !important; align-items: stretch !important;
 }
 html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) {
-  flex: 0 0 204px !important; width: 204px !important; max-width: 204px !important;
+  flex: 0 0 200px !important; width: 200px !important; max-width: 200px !important;
   padding: 16px 12px 22px !important; background: #FFFFFF !important;
   border-right: 1px solid var(--border) !important;
   position: sticky !important; top: 0 !important; align-self: flex-start !important;
@@ -3469,6 +3469,25 @@ briefing = cq.briefing_articles(feed_pool, preferences=_user_preferences(),
 st.markdown('<div class="ow-dash"></div>', unsafe_allow_html=True)
 sidebar_col, main_col = st.columns([1, 5], gap="small")
 
+def _interest_icon(topic):
+    """Map a topic to a compact Material icon string."""
+    t = (topic or "").lower()
+    if any(k in t for k in ("health", "medicine", "clinical")):
+        return ":material/favorite:"
+    if any(k in t for k in ("science", "research", "tech", "ai", "quantum")):
+        return ":material/science:"
+    if any(k in t for k in ("econ", "finance", "market", "business")):
+        return ":material/bar_chart:"
+    if any(k in t for k in ("climate", "environment", "green")):
+        return ":material/eco:"
+    if any(k in t for k in ("policy", "government", "law")):
+        return ":material/gavel:"
+    if any(k in t for k in ("education", "learn")):
+        return ":material/school:"
+    if any(k in t for k in ("general", "knowledge")):
+        return ":material/lightbulb:"
+    return ":material/label:"
+
 def _navigate(tab_id, strategy=None, topic=None):
     """Single navigation entry point so tab + feed strategy never drift apart."""
     st.session_state.main_tab = tab_id
@@ -3527,7 +3546,8 @@ with sidebar_col:
         for _t in _feed_interests:
             _is_active = (_t == active and _cur_tab == "feed"
                           and _cur_strategy == "my_fields")
-            if st.button(_t[:26], key=f"topic_{_t}", icon=":material/circle:",
+            _ico = _interest_icon(_t)
+            if st.button(_t[:26], key=f"topic_{_t}", icon=_ico,
                          use_container_width=True,
                          type="primary" if _is_active else "secondary",
                          help=f"Filter your feed to {_t}"):
@@ -3538,66 +3558,10 @@ with sidebar_col:
                  use_container_width=True):
         st.session_state.screen = "interests"; st.rerun()
 
-    # Quick preference editor — refine discovery preferences without re-onboarding.
-    with st.expander("Discovery preferences", expanded=False):
-        _PREFS = [
-            "New research & journal publications",
-            "Emerging trends & breakthroughs",
-            "Current affairs & world events",
-            "Government policies & official reports",
-            "Industry & professional developments",
-            "Grants, fellowships & opportunities",
-            "Organisations & institutions",
-            "Exam-relevant current affairs",
-            "Practical explainers & background knowledge",
-            "General knowledge beyond my usual interests",
-        ]
-        _cur = st.session_state.get("discover_preferences") or []
-        _disabled_subtypes = st.session_state.get("disabled_subtypes", set())
-        for _pn in _PREFS:
-            _is = _pn in _cur
-            if st.checkbox(_pn, value=_is, key=f"pref_edit_{_pn}"):
-                if _pn not in _cur:
-                    _cur.append(_pn)
-            else:
-                if _pn in _cur:
-                    _cur.remove(_pn)
-            # Show subtypes for enabled preferences.
-            if _pn in _cur:
-                _basket = fs.get_basket(_pn)
-                if _basket:
-                    with st.expander(f"  subtypes: {_pn[:20]}", expanded=False):
-                        for _st in _basket.get("subtypes", []):
-                            _key = f"{_pn}::{_st}"
-                            _enabled = _key not in _disabled_subtypes
-                            if not st.checkbox(_st, value=_enabled,
-                                               key=f"subtype_{_pn}::{_st}"):
-                                _disabled_subtypes.add(_key)
-                            else:
-                                _disabled_subtypes.discard(_key)
-        st.session_state.discover_preferences = _cur
-        st.session_state.disabled_subtypes = _disabled_subtypes
-
-    # Subtopics for the active interest
-    with st.expander("Refine subtopics", expanded=bool(subtopics_for_active)):
-        cur_subs = st.session_state.subtopics.get(active, [])
-        s1, s2 = st.columns([4,1])
-        new_s = s1.text_input("Add subtopic", key=f"sb_{active}", placeholder="narrow search…",
-                              label_visibility="collapsed")
-        if s2.button("+", key=f"sb_add_{active}") and new_s.strip():
-            if new_s.strip() not in cur_subs: cur_subs.append(new_s.strip())
-            st.session_state.subtopics[active] = cur_subs; st.rerun()
-        for s in cur_subs:
-            sc1, sc2 = st.columns([3,1])
-            sc1.markdown(f"<span style='font-size:0.79rem;color:#64748B'>{_html.escape(s[:18])}</span>",
-                         unsafe_allow_html=True)
-            if sc2.button("✕", key=f"sb_rm_{active}_{s[:12]}"):
-                cur_subs.remove(s); st.session_state.subtopics[active] = cur_subs; st.rerun()
-
-    st.markdown('<div class="ow-sb-divider"></div>', unsafe_allow_html=True)
-    if st.button("Settings", key="settings_btn", icon=":material/settings:",
+    # Compact preference link (opens full editor on interests screen)
+    if st.button("Edit preferences", key="edit_prefs", icon=":material/tune:",
                  use_container_width=True):
-        st.session_state.right_panel = "settings"; st.rerun()
+        st.session_state.screen = "interests"; st.rerun()
 
 # ══════════════════════
 # MAIN CONTENT AREA — tabbed
