@@ -3540,7 +3540,7 @@ with sidebar_col:
                             _key = f"{_pn}::{_st}"
                             _enabled = _key not in _disabled_subtypes
                             if not st.checkbox(_st, value=_enabled,
-                                               key=f"subtype_{_key[:40]}"):
+                                               key=f"subtype_{_pn}::{_st}"):
                                 _disabled_subtypes.add(_key)
                             else:
                                 _disabled_subtypes.discard(_key)
