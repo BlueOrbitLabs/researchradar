@@ -494,3 +494,66 @@ class SimilarSourcesTest(unittest.TestCase):
         names = [s["name"] for s in similar]
         self.assertIn("UNICEF", names)
         self.assertNotIn("WHO", names)
+
+
+class DiscoveryBasketTest(unittest.TestCase):
+    def test_all_11_preferences_have_baskets(self):
+        expected = [
+            "New research & journal publications",
+            "Emerging trends & breakthroughs",
+            "Current affairs & world events",
+            "Government policies & official reports",
+            "Industry & professional developments",
+            "Grants, fellowships & opportunities",
+            "Organisations & institutions",
+            "Exam-relevant current affairs",
+            "Practical explainers & background knowledge",
+            "General knowledge beyond my usual interests",
+            "Local news & community updates",
+        ]
+        for pref in expected:
+            b = fs.get_basket(pref)
+            self.assertIsNotNone(b, f"No basket for {pref}")
+            self.assertTrue(len(b["subtypes"]) > 0, f"Empty subtypes for {pref}")
+
+    def test_same_basket_adapts_to_different_interests(self):
+        basket = fs.get_basket("New research & journal publications")
+        a1 = fs.adapt_basket(basket, "public health", ["epidemiology"])
+        a2 = fs.adapt_basket(basket, "physics", ["quantum mechanics"])
+        self.assertIn("public health", " ".join(a1["query_terms"]).lower())
+        self.assertIn("physics", " ".join(a2["query_terms"]).lower())
+        # Same content types
+        self.assertEqual(a1["content_types"], a2["content_types"])
+
+    def test_adapt_all_baskets(self):
+        interests = ["public health", "AI & Technology"]
+        prefs = ["New research & journal publications", "Grants, fellowships & opportunities"]
+        subtopics = {"public health": ["epidemiology"], "AI & Technology": ["machine learning"]}
+        adapted = fs.adapt_all_baskets(interests, prefs, subtopics)
+        self.assertTrue(len(adapted) > 0)
+        # Should have one adaptation per interest x preference
+        self.assertEqual(len(adapted), len(interests) * len(prefs))
+
+    def test_classify_subtype_grants(self):
+        basket = fs.get_basket("Grants, fellowships & opportunities")
+        art_grant = {"title": "Call for proposals: research fellowship in public health",
+                     "summary": "Funding call for a research fellowship.", "source": "WHO"}
+        subtype = fs.classify_subtype(art_grant, basket)
+        self.assertIsNotNone(subtype)
+
+    def test_classify_subtype_returns_none_for_no_match(self):
+        basket = fs.get_basket("Grants, fellowships & opportunities")
+        art_unrelated = {"title": "Weather forecast for tomorrow",
+                          "summary": "Sunny with clouds.", "source": "BBC"}
+        subtype = fs.classify_subtype(art_unrelated, basket)
+        self.assertIsNone(subtype)
+
+    def test_empty_pool_does_not_break(self):
+        # adapt_all_baskets with empty inputs
+        adapted = fs.adapt_all_baskets([], [], {})
+        self.assertEqual(adapted, [])
+
+    def test_local_news_basket_is_local_only(self):
+        basket = fs.get_basket("Local news & community updates")
+        self.assertTrue(basket.get("local_only"))
+        self.assertEqual(basket.get("content_types"), set())

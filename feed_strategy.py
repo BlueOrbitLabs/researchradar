@@ -170,6 +170,230 @@ TYPE_PATTERNS = {
 RESEARCH_SOURCES = ("openalex", "pubmed", "europe pmc", "arxiv", "doaj",
                     "crossref", "nber", "doi.org")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Discovery Baskets — central taxonomy for the 11 discovery preferences.
+# Each basket defines subtypes, source types, query terms, classification
+# signals and ranking hints. Baskets are adapted to user interests at
+# retrieval time via adapt_basket() — never hardcoded per field.
+# ─────────────────────────────────────────────────────────────────────────────
+DISCOVERY_BASKETS = {
+    "new_research": {
+        "id": "new_research",
+        "display_name": "New research & journal publications",
+        "preference": "New research & journal publications",
+        "subtypes": ["original_research", "systematic_review", "meta_analysis",
+                     "working_paper", "preprint", "clinical_study", "journal_issue"],
+        "source_types": ["journal", "repository", "institution"],
+        "content_types": {"research"},
+        "query_terms": ["study", "trial", "research", "journal", "paper",
+                        "publication", "preprint", "review"],
+        "classification_signals": ["study", "trial", "cohort", "meta-analysis",
+                                  "systematic review", "journal", "preprint",
+                                  "peer-reviewed", "et al"],
+        "ranking": {"relevance": 0.40, "freshness": 0.20, "quality": 0.25,
+                    "preference": 0.15},
+    },
+    "emerging_trends": {
+        "id": "emerging_trends",
+        "display_name": "Emerging trends & breakthroughs",
+        "preference": "Emerging trends & breakthroughs",
+        "subtypes": ["breakthrough", "novel_method", "emerging_area",
+                     "innovation", "new_application", "practice_change"],
+        "source_types": ["journal", "repository", "news", "industry"],
+        "content_types": {"research", "industry"},
+        "query_terms": ["breakthrough", "novel", "emerging", "innovation",
+                        "new method", "discovery", "advance"],
+        "classification_signals": ["breakthrough", "novel", "emerging",
+                                  "innovation", "discovery", "first"],
+        "ranking": {"freshness": 0.40, "relevance": 0.25, "quality": 0.20,
+                    "preference": 0.15},
+    },
+    "current_affairs": {
+        "id": "current_affairs",
+        "display_name": "Current affairs & world events",
+        "preference": "Current affairs & world events",
+        "subtypes": ["major_development", "sector_news", "significant_event",
+                     "economic", "political", "social", "scientific"],
+        "source_types": ["news", "government", "institution"],
+        "content_types": {"news", "policy"},
+        "query_terms": ["news", "development", "event", "update", "latest"],
+        "classification_signals": ["announced", "reported", "developments",
+                                  "events", "latest"],
+        "ranking": {"freshness": 0.45, "relevance": 0.25, "quality": 0.15,
+                    "preference": 0.15},
+    },
+    "government_policy": {
+        "id": "government_policy",
+        "display_name": "Government policies & official reports",
+        "preference": "Government policies & official reports",
+        "subtypes": ["law", "regulation", "policy_change", "announcement",
+                     "official_report", "guideline", "strategy", "consultation",
+                     "programme"],
+        "source_types": ["government", "institution", "news"],
+        "content_types": {"policy"},
+        "query_terms": ["policy", "regulation", "law", "government", "official",
+                        "report", "guideline", "strategy", "directive"],
+        "classification_signals": ["policy", "regulation", "law", "government",
+                                  "ministry", "official", "directive", "bill"],
+        "ranking": {"relevance": 0.35, "freshness": 0.25, "quality": 0.25,
+                    "preference": 0.15},
+    },
+    "industry": {
+        "id": "industry",
+        "display_name": "Industry & professional developments",
+        "preference": "Industry & professional developments",
+        "subtypes": ["sector_development", "market_change", "professional_standard",
+                     "new_tool", "industry_report", "workforce", "conference"],
+        "source_types": ["news", "industry", "institution"],
+        "content_types": {"industry"},
+        "query_terms": ["industry", "market", "sector", "professional", "tool",
+                        "service", "conference", "standard"],
+        "classification_signals": ["industry", "market", "company", "startup",
+                                  "sector", "professional", "tool", "service"],
+        "ranking": {"freshness": 0.35, "relevance": 0.30, "quality": 0.20,
+                    "preference": 0.15},
+    },
+    "grants": {
+        "id": "grants",
+        "display_name": "Grants, fellowships & opportunities",
+        "preference": "Grants, fellowships & opportunities",
+        "subtypes": ["research_grant", "funding_call", "fellowship",
+                     "scholarship", "studentship", "postdoc", "award",
+                     "competition", "application_deadline"],
+        "source_types": ["government", "institution", "repository"],
+        "content_types": {"grants"},
+        "query_terms": ["grant", "fellowship", "scholarship", "funding",
+                        "studentship", "postdoc", "award", "call for proposals",
+                        "application"],
+        "classification_signals": ["grant", "fellowship", "scholarship",
+                                  "funding call", "call for proposals",
+                                  "studentship", "postdoc", "award", "bursary",
+                                  "apply now", "applications open"],
+        "ranking": {"freshness": 0.30, "relevance": 0.30, "quality": 0.20,
+                    "preference": 0.20},
+    },
+    "organisations": {
+        "id": "organisations",
+        "display_name": "Organisations & institutions",
+        "preference": "Organisations & institutions",
+        "subtypes": ["agency", "international_org", "university", "research_institute",
+                     "ngo", "foundation", "think_tank", "professional_body",
+                     "regulatory_body", "institutional_report"],
+        "source_types": ["institution", "government", "organisation"],
+        "content_types": {"organisation", "policy", "research"},
+        "query_terms": ["organization", "institution", "agency", "university",
+                        "institute", "foundation", "ngo", "think tank"],
+        "classification_signals": ["organization", "organisation", "institution",
+                                  "agency", "university", "institute",
+                                  "foundation", "ngo", "who", "unicef"],
+        "ranking": {"relevance": 0.35, "quality": 0.30, "freshness": 0.20,
+                    "preference": 0.15},
+    },
+    "exam_relevant": {
+        "id": "exam_relevant",
+        "display_name": "Exam-relevant current affairs",
+        "preference": "Exam-relevant current affairs",
+        "subtypes": ["exam_news", "government_programme", "report", "index",
+                     "statistic", "appointment", "science_development",
+                     "economics_development"],
+        "source_types": ["news", "government", "institution"],
+        "content_types": {"news", "policy"},
+        "query_terms": ["current affairs", "exam", "upsc", "report", "index",
+                        "statistics", "appointment", "programme"],
+        "classification_signals": ["current affairs", "report", "index",
+                                  "statistics", "appointment", "programme",
+                                  "scheme"],
+        "ranking": {"relevance": 0.40, "freshness": 0.30, "quality": 0.15,
+                    "preference": 0.15},
+    },
+    "explainers": {
+        "id": "explainers",
+        "display_name": "Practical explainers",
+        "preference": "Practical explainers & background knowledge",
+        "subtypes": ["concept_explainer", "how_to", "tutorial", "method",
+                     "framework", "tool_guide", "evidence_answer"],
+        "source_types": ["news", "institution", "repository"],
+        "content_types": {"explainer"},
+        "query_terms": ["explain", "what is", "how to", "guide", "primer",
+                        "introduction", "overview", "tutorial"],
+        "classification_signals": ["explain", "what is", "how to", "guide",
+                                  "primer", "introduction", "overview",
+                                  "tutorial", "background"],
+        "ranking": {"relevance": 0.35, "quality": 0.30, "freshness": 0.15,
+                    "preference": 0.20},
+    },
+    "general_knowledge": {
+        "id": "general_knowledge",
+        "display_name": "General knowledge beyond usual interests",
+        "preference": "General knowledge beyond my usual interests",
+        "subtypes": ["cross_topic_discovery", "major_development",
+                     "broadly_significant", "cross_disciplinary"],
+        "source_types": ["news", "institution", "journal"],
+        "content_types": {"explainer", "research", "news"},
+        "query_terms": ["discovery", "breakthrough", "major", "significant",
+                        "world", "science", "history", "economics"],
+        "classification_signals": [],  # matches by cross-topic, not keywords
+        "ranking": {"relevance": 0.20, "freshness": 0.30, "quality": 0.30,
+                    "preference": 0.20},
+        "cross_topic": True,
+    },
+    "local_news": {
+        "id": "local_news",
+        "display_name": "Local news & community updates",
+        "preference": "Local news & community updates",
+        "subtypes": ["local_government", "community_event", "regional_service",
+                     "local_initiative", "local_development"],
+        "source_types": ["news", "government", "community"],
+        "content_types": set(),  # handled by local news tab, not general feeds
+        "query_terms": [],
+        "classification_signals": [],
+        "ranking": {},
+        "local_only": True,
+    },
+}
+
+# Map preference display name -> basket id
+PREFERENCE_TO_BASKET = {b["preference"]: bid for bid, b in DISCOVERY_BASKETS.items()}
+
+
+def get_basket(preference):
+    """Return the basket config for a preference display name, or None."""
+    bid = PREFERENCE_TO_BASKET.get(preference)
+    return DISCOVERY_BASKETS.get(bid) if bid else None
+
+
+def adapt_basket(basket, interest, subtopics=None, role=None):
+    """Adapt a basket to a specific interest, producing query terms and hints.
+
+    Returns a dict with:
+      - query_terms: list of search terms (interest + subtype terms)
+      - content_types: set of relevant content types
+      - source_types: list of relevant source types
+      - cross_topic: bool
+    """
+    if not basket:
+        return {"query_terms": [interest], "content_types": set(),
+                "source_types": [], "cross_topic": False}
+    terms = [interest]
+    for sub in (subtopics or [])[:3]:
+        terms.append(f"{interest} {sub}")
+    for qt in (basket.get("query_terms") or [])[:4]:
+        terms.append(f"{interest} {qt}")
+    return {
+        "query_terms": terms,
+        "content_types": set(basket.get("content_types") or set()),
+        "source_types": list(basket.get("source_types") or []),
+        "cross_topic": bool(basket.get("cross_topic")),
+        "subtypes": list(basket.get("subtypes") or []),
+    }
+
+
+def all_baskets():
+    """Return all basket configs as a list."""
+    return list(DISCOVERY_BASKETS.values())
+
+
 # Role -> affinity per content type. Soft signals, never restrictions.
 ROLE_AFFINITY = {
     "phd": {"research": 1.0, "policy": 0.4, "explainer": 0.2, "organisation": 0.5},
@@ -187,6 +411,62 @@ STOPWORDS = {
     "their", "have", "will", "about", "after", "before", "than", "they",
     "what", "when", "where", "which", "while", "your", "more", "most",
 }
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Basket adaptation helpers
+# ─────────────────────────────────────────────────────────────────────────────
+def classify_subtype(article, basket):
+    """Classify an article into the best-matching subtype of a basket.
+
+    Returns the subtype string or None if no signal matches. Uses the
+    basket's classification_signals (regex word matching) against title +
+    summary + source. Returns None for uncertain classifications.
+    """
+    if not basket:
+        return None
+    signals = basket.get("classification_signals") or []
+    if not signals:
+        return None
+    haystack = " ".join(filter(None, [
+        article.get("title"), article.get("summary"),
+        article.get("source"), article.get("retrieved_via"),
+    ])).lower()
+    if not haystack:
+        return None
+    matches = [sig for sig in signals if sig.lower() in haystack]
+    if not matches:
+        return None
+    # Return the first matching signal as the subtype proxy.
+    return matches[0]
+
+
+def basket_for_preference(preference):
+    """Return the basket config for a preference display name."""
+    return get_basket(preference)
+
+
+def adapt_all_baskets(interests, preferences, subtopics=None, role=None):
+    """Adapt all selected preference baskets to the user's interests.
+
+    Returns a list of adapted basket dicts, each with query_terms,
+    content_types, source_types, cross_topic, and the original basket.
+    """
+    result = []
+    for pref in (preferences or []):
+        basket = get_basket(pref)
+        if not basket:
+            continue
+        for interest in (interests or []):
+            adapted = adapt_basket(basket, interest,
+                                   (subtopics or {}).get(interest, []),
+                                   role)
+            adapted["basket"] = basket
+            adapted["interest"] = interest
+            adapted["preference"] = pref
+            result.append(adapted)
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

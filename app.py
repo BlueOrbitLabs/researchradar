@@ -3382,6 +3382,17 @@ if st.session_state.get("feed_pool_key") != _pool_key or st.session_state.get("f
         )
     # Track sources from this refresh for novelty in the next one.
     st.session_state.recent_sources = {a.get('source') for a in (_pool or []) if a.get('source')}
+    # Classify each article into discovery basket subtypes (cached on the record).
+    _prefs = st.session_state.get("discover_preferences") or []
+    for _a in (_pool or []):
+        if "_subtypes" not in _a:
+            _a["_subtypes"] = []
+            for _pref in _prefs:
+                _b = fs.get_basket(_pref)
+                if _b:
+                    _st = fs.classify_subtype(_a, _b)
+                    if _st:
+                        _a["_subtypes"].append((_pref, _st))
     st.session_state.feed_pool = _pool
     update_source_health(_pool)
     st.session_state.feed_pool_key = _pool_key
