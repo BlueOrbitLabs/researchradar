@@ -4256,17 +4256,22 @@ with main_col:
                 _img_url = art.get("image", "") or ""
                 _c_img, _c_head, _c_save = st.columns([1.2, 7.5, 1], gap="small")
                 with _c_img:
+                    _topic_ico = topic_icon(art.get("topic", ""))
                     if _img_url:
-                        st.markdown(f'<img src="{_html.escape(_img_url, quote=True)}" '
+                        st.markdown(f'<div style="width:100%;height:92px;border-radius:8px;overflow:hidden;'
+                                    f'background:linear-gradient(135deg,#EDF3FF 0%,#F5F8FE 100%);'
+                                    f'display:flex;align-items:center;justify-content:center;">'
+                                    f'<img src="{_html.escape(_img_url, quote=True)}" '
                                     f'style="width:100%;height:92px;object-fit:cover;border-radius:8px;" '
                                     f'alt="" loading="lazy" '
-                                    f'onerror="this.style.display=\'none\'">', unsafe_allow_html=True)
+                                    f'onerror="this.style.display=\'none\'"></div>', unsafe_allow_html=True)
                     else:
-                        _topic_ico = topic_icon(art.get("topic", "")) if "topic_icon" in dir() else "📄"
-                        st.markdown(f'<div style="width:100%;height:92px;background:linear-gradient(135deg,#EDF3FF,#F5F8FE);'
+                        st.markdown(f'<div style="width:100%;height:92px;'
+                                    f'background:linear-gradient(135deg,#EDF3FF 0%,#F5F8FE 100%);'
                                     f'border-radius:8px;display:flex;align-items:center;'
-                                    f'justify-content:center;font-size:1.4rem;opacity:0.5;">'
+                                    f'justify-content:center;font-size:1.6rem;opacity:0.45;">'
                                     f'{_topic_ico}</div>', unsafe_allow_html=True)
+
                 with _c_head:
                     st.markdown(f'''
                     {read_flag}
