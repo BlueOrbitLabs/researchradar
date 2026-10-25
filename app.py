@@ -1645,36 +1645,39 @@ st.markdown("""
    Streamlit re-renders the whole page on every st.rerun(). Keep a solid
    page background at all times and avoid opacity fade-ins that read as a
    black flash between screens.                                         ── */
-html, body, .stApp { background: #FAFBFD !important; }
+html, body, .stApp { background: #F5F8FE !important; }
 /* Hide the spinning status widget in the bottom-right (adds visual noise) */
 [data-testid="stStatusWidget"]           { display: none !important; }
 [data-testid="stAppToolbar"]             { display: none !important; }
 [data-testid="stDecoration"]             { display: none !important; }
 
 :root {
-  /* ── Owlume Design Tokens (Phase 1C visual system) ── */
-  --navy:       #182653;          /* primary text / brand */
-  --blue:       #3D5AFE;          /* primary interactive blue */
-  --hover-blue: #2F49E8;          /* hover */
-  --violet:     #5B74FF;          /* gradient highlight only */
+  /* ── Owlume Design Tokens (Phase 1C visual system — reference spec) ── */
+  --navy:       #102A8F;          /* primary navy */
+  --blue:       #2458F5;          /* primary blue */
+  --hover-blue: #1A47D8;          /* hover */
+  --violet:     #3975FF;          /* secondary blue */
   --cyan:       #0891b2;
-  --bg:         #F5F7FC;          /* app background */
+  --bg:         #F5F8FE;          /* main background */
   --card:       #FFFFFF;          /* cards / reading surfaces */
-  --border:     #E0E7F1;          /* borders */
-  --divider:    #EDF1F7;          /* subtle dividers */
-  --muted:      #64748B;          /* secondary text */
-  --meta:       #8493AD;          /* metadata */
-  --text:       #182653;          /* primary text */
-  --accent-bg:  #EAF0FF;          /* selected / pale blue */
-  --soft-blue:  #F0F5FF;          /* soft informational surface */
+  --border:     #E2E9F3;          /* borders */
+  --divider:    #E8EDF5;          /* subtle dividers */
+  --muted:      #66748D;          /* secondary text */
+  --meta:       #8793A8;          /* metadata */
+  --text:       #14213D;          /* primary text */
+  --accent-bg:  #E8F0FF;          /* selected / pale blue */
+  --soft-blue:  #EDF3FF;          /* soft informational surface */
+  --chip-blue-bg: #EDF3FF;        /* topic chip background */
+  --chip-blue-text: #3158BD;      /* topic chip text */
+  --chip-neutral-bg: #EEF1F6;     /* neutral chip background */
   --success:    #15803D;
   --success-bg: #DCFCE7;
   --warning:    #B45309;
   --warning-bg: #FEF3C7;
   --error:      #DC2626;
-  --info:       #3D5AFE;
-  --card-radius: 14px;
-  --control-radius: 10px;
+  --info:       #2458F5;
+  --card-radius: 12px;
+  --control-radius: 8px;
 }
 
 html, body, .stApp, button, input, textarea, select,
@@ -2117,23 +2120,23 @@ html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) > [data-test
   padding: 4px 8px 15px; margin-bottom: 10px;
   border-bottom: 1px solid var(--divider);
 }
-.ow-brand img { width: 30px; height: 30px; border-radius: 8px; display: block; }
-.ow-brand-name { font-size: 1.28rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.ow-brand img { width: 22px; height: 22px; border-radius: 6px; display: block; }
+.ow-brand-name { font-size: 0.95rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
 .ow-sb-label {
-  font-size: 0.68rem; font-weight: 700; color: var(--meta);
+  font-size: 0.62rem; font-weight: 700; color: var(--meta);
   text-transform: uppercase; letter-spacing: 0.09em;
-  margin: 14px 9px 5px;
+  margin: 10px 9px 4px;
 }
 
 /* Sidebar navigation + interest buttons: compact, light, never filled black */
 html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) .stButton button {
-  width: 100% !important; min-height: 36px !important; height: auto !important;
+  width: 100% !important; min-height: 29px !important; height: auto !important;
   justify-content: flex-start !important; text-align: left !important;
   background: transparent !important; border: 1px solid transparent !important;
-  border-radius: 9px !important; box-shadow: none !important;
-  color: var(--navy) !important; font-size: 0.86rem !important;
-  font-weight: 500 !important; padding: 8px 10px !important;
-  gap: 9px !important; line-height: 1.3 !important;
+  border-radius: 8px !important; box-shadow: none !important;
+  color: var(--navy) !important; font-size: 0.72rem !important;
+  font-weight: 500 !important; padding: 6px 9px !important;
+  gap: 8px !important; line-height: 1.3 !important;
 }
 html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) .stButton button p {
   font-size: inherit !important; font-weight: inherit !important;
@@ -2181,7 +2184,7 @@ html:has(.ow-dash) .st-key-ow-topbar [data-testid="stHorizontalBlock"] {
 }
 html:has(.ow-dash) .st-key-ow-topbar [data-testid="stTextInput"] div[data-testid="stTextInputRootElement"] {
   background: #FFFFFF !important; border: 1px solid var(--border) !important;
-  border-radius: 11px !important; min-height: 42px !important;
+  border-radius: 16px !important; min-height: 30px !important;
   box-shadow: none !important; transition: border-color 0.15s, box-shadow 0.15s;
 }
 html:has(.ow-dash) .st-key-ow-topbar [data-testid="stTextInput"] div[data-testid="stTextInputRootElement"]:focus-within {
@@ -2215,15 +2218,15 @@ html:has(.ow-dash) .st-key-ow-bell button [data-testid="stIconMaterial"] { font-
   margin-left: auto; user-select: none;
 }
 .ow-page-title {
-  font-size: 1.45rem; font-weight: 800; color: var(--navy);
-  letter-spacing: -0.02em; line-height: 42px;
+  font-size: 1.1rem; font-weight: 800; color: var(--navy);
+  letter-spacing: -0.02em; line-height: 30px;
 }
 html:has(.ow-dash) .st-key-ow-topbar [data-testid="stColumn"] { align-self: center !important; }
 
 /* ── Daily briefing banner ────────────────────────────────────────────── */
 html:has(.ow-dash) .st-key-ow-briefing {
-  background: linear-gradient(135deg, #2F49E8 0%, #3D5AFE 58%, #5B74FF 100%) !important;
-  border-radius: 15px !important; padding: 18px 20px !important;
+  background: linear-gradient(105deg, #102A8F 0%, #1748D7 55%, #2864F8 100%) !important;
+  border-radius: 12px !important; padding: 14px 16px !important;
   box-shadow: 0 8px 22px rgba(61,90,254,0.18) !important;
   color: #FFFFFF !important; gap: 4px !important;
 }
@@ -2232,16 +2235,16 @@ html:has(.ow-dash) .st-key-ow-briefing [data-testid="stHorizontalBlock"] {
 }
 .ow-briefing-left { display: flex; align-items: center; gap: 13px; min-width: 0; }
 .ow-briefing-icon {
-  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+  width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0;
   background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.25);
   display: flex; align-items: center; justify-content: center;
 }
 .ow-briefing-kicker {
-  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.1em;
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em;
   text-transform: uppercase; color: rgba(255,255,255,0.72); margin-bottom: 2px;
 }
-.ow-briefing-h { font-size: 1.08rem; font-weight: 700; color: #FFFFFF; margin: 0; line-height: 1.3; }
-.ow-briefing-sub { font-size: 0.8rem; color: rgba(255,255,255,0.82); margin-top: 3px; line-height: 1.4; }
+.ow-briefing-h { font-size: 0.95rem; font-weight: 700; color: #FFFFFF; margin: 0; line-height: 1.3; }
+.ow-briefing-sub { font-size: 0.72rem; color: rgba(255,255,255,0.82); margin-top: 2px; line-height: 1.4; }
 html:has(.ow-dash) .st-key-ow-open-briefing button {
   width: 100% !important; min-height: 34px !important; height: 34px !important;
   background: rgba(255,255,255,0.14) !important;
@@ -2288,7 +2291,7 @@ html:has(.ow-dash) [class*="st-key-art-"] {
   background: #FFFFFF !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--card-radius) !important;
-  padding: 14px 16px 12px !important;
+  padding: 12px 14px 10px !important;
   box-shadow: 0 1px 2px rgba(24,38,83,0.04) !important;
   gap: 6px !important;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -2301,8 +2304,8 @@ html:has(.ow-dash) [class*="st-key-art-"]:hover {
 html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.72; }
 .ow-card-read-flag { display: none; }
 .ow-card-meta {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-  font-size: 0.76rem; color: var(--meta); margin-bottom: 3px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 5px;
+  font-size: 0.62rem; color: var(--meta); margin-bottom: 2px;
 }
 .ow-card-publisher { color: var(--muted); font-weight: 600; }
 .ow-card-date { color: var(--meta); }
@@ -2315,22 +2318,22 @@ html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.7
 .ow-card-badge.relevant { background: var(--warning-bg); color: var(--warning); }
 .ow-card-badge.read { background: var(--soft-blue); color: var(--muted); }
 .ow-card-title {
-  display: block; font-size: 1.06rem; font-weight: 650; color: var(--navy) !important;
+  display: block; font-size: 0.75rem; font-weight: 650; color: var(--navy) !important;
   line-height: 1.4; text-decoration: none !important; letter-spacing: -0.006em;
   margin: 1px 0 4px;
 }
 .ow-card-title:hover { color: var(--blue) !important; }
 .ow-card-summary {
-  font-size: 0.855rem; color: var(--muted); line-height: 1.55;
+  font-size: 0.68rem; color: var(--muted); line-height: 1.4;
   margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 3;
   -webkit-box-orient: vertical; overflow: hidden;
 }
 .ow-card-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 2px; }
 .ow-card-chip {
   display: inline-flex; align-items: center;
-  background: var(--soft-blue); border: 1px solid #E3EBFA;
-  color: #4A5F8F; border-radius: 999px; padding: 2px 9px;
-  font-size: 0.68rem; font-weight: 600; line-height: 1.55;
+  background: var(--chip-blue-bg); border: 1px solid #DCE6FF;
+  color: var(--chip-blue-text); border-radius: 999px; padding: 2px 8px;
+  font-size: 0.6rem; font-weight: 600; line-height: 1.5;
 }
 /* Empty / failure states keep the same reading surface as a card */
 .ow-empty {
@@ -2340,8 +2343,8 @@ html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.7
 .ow-empty-h { font-weight: 700; color: var(--navy); margin: 8px 0 4px; font-size: 0.95rem; }
 /* Save sits at the card's upper right, not in the action row */
 html:has(.ow-dash) [class*="st-key-save-"] button {
-  width: 34px !important; min-width: 34px !important; height: 34px !important;
-  min-height: 34px !important; padding: 0 !important;
+  width: 26px !important; min-width: 26px !important; height: 26px !important;
+  min-height: 26px !important; padding: 0 !important;
   border-radius: 9px !important; background: #FFFFFF !important;
   border: 1px solid var(--border) !important; color: var(--navy) !important;
   box-shadow: none !important;
@@ -2373,15 +2376,15 @@ html:has(.ow-dash) [class*="st-key-ow-actions-"] [data-testid="stElementContaine
   width: auto !important; flex: 0 0 auto !important;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button {
-  width: auto !important; min-height: 31px !important; height: 31px !important;
+  width: auto !important; min-height: 24px !important; height: 24px !important;
   background: #FFFFFF !important; border: 1px solid var(--border) !important;
-  border-radius: 8px !important; color: var(--blue) !important;
-  font-size: 0.75rem !important; font-weight: 600 !important;
-  padding: 0 10px !important; box-shadow: none !important;
-  white-space: nowrap !important; gap: 5px !important;
+  border-radius: 7px !important; color: var(--blue) !important;
+  font-size: 0.62rem !important; font-weight: 600 !important;
+  padding: 0 9px !important; box-shadow: none !important;
+  white-space: nowrap !important; gap: 4px !important;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button p {
-  font-size: 0.75rem !important; font-weight: 600 !important; color: inherit !important;
+  font-size: 0.62rem !important; font-weight: 600 !important; color: inherit !important;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button [data-testid="stIconMaterial"] {
   font-size: 15px !important; color: inherit !important;
