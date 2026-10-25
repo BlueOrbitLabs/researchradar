@@ -493,7 +493,8 @@ def _subtopic_for(article, subtopics_by_topic):
     return subtopic_match(article, (subtopics_by_topic or {}).get(topic) or [])
 
 
-def _personalisation_boost(article, reading_profile, followed_sources):
+def _personalisation_boost(article, reading_profile, followed_sources,
+                           recent_sources=None):
     """Soft, capped boost from reading history and followed sources.
 
     Returns a value in [0, 0.15] so personalisation nudges rather than
@@ -514,14 +515,17 @@ def _personalisation_boost(article, reading_profile, followed_sources):
         boost += 0.05 * affinity
     if followed_sources and art_source in (followed_sources or set()):
         boost += 0.04
-    return min(0.15, boost)
+    # Source-level novelty: penalise sources seen in the recent refresh.
+    if recent_sources and art_source in (recent_sources or set()):
+        boost -= 0.06
+    return min(0.15, max(-0.10, boost))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Feed A — For You
 # ─────────────────────────────────────────────────────────────────────────────
 def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
-                 reading_profile=None, followed_sources=None):
+                 reading_profile=None, followed_sources=None, recent_sources=None):
     """Balanced feed: relevance + preference fit + recency, plus discovery slots.
 
     Articles from outside the user's interests are included but scored with a
@@ -548,7 +552,7 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
             "profile": profile_affinity(article, role),
         }
         score = (_weighted(features, cfg)
-                + _personalisation_boost(article, reading_profile, followed_sources))
+                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources))
         outside = bool(user_topics) and (article.get("topic") or "") not in user_topics
         if outside:
             if not is_current_discovery(article):
@@ -582,7 +586,7 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
 # ─────────────────────────────────────────────────────────────────────────────
 def rank_my_fields(pool, topics, subtopics, preferences=(), role=None,
                    filter_topic=None, today=None, reading_profile=None,
-                   followed_sources=None):
+                   followed_sources=None, recent_sources=None):
     """Interest-faithful feed; optionally restricted to a single interest."""
     cfg = CONFIG["my_fields"]
     user_topics = set(topics or [])
@@ -662,7 +666,7 @@ def corroboration_scores(articles):
 
 
 def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None,
-                 reading_profile=None, followed_sources=None):
+                 reading_profile=None, followed_sources=None, recent_sources=None):
     """Recent developments ranked by recency, corroboration and source quality.
 
     Distinct from My Fields: freshness dominates, items independently reported
@@ -692,7 +696,7 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
             "preference": preference_match(article, preferences),
         }
         score = (_weighted(features, cfg)
-                + _personalisation_boost(article, reading_profile, followed_sources))
+                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources))
         if user_topics and (article.get("topic") or "") in user_topics:
             score += cfg["interest_bonus"]
         scored.append((score, article))
@@ -710,7 +714,7 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
 # ─────────────────────────────────────────────────────────────────────────────
 def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
                  outside_topics=(), today=None, reading_profile=None,
-                 followed_sources=None):
+                 followed_sources=None, recent_sources=None):
     """High-quality material from outside the user's primary interests.
 
     ``outside_topics`` lets the caller name topics retrieved purely for
@@ -738,7 +742,7 @@ def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
             "relevance": _relevance(article),
         }
         value = (_weighted(features, cfg)
-                + _personalisation_boost(article, reading_profile, followed_sources))
+                + _personalisation_boost(article, reading_profile, followed_sources, recent_sources))
         # Accessible formats are preferable when broadening.
         if infer_content_type(article) in ("explainer", "research"):
             value += 0.05
@@ -901,3 +905,33 @@ def recommend_sources(sources, user_topics, user_preferences=(), followed_source
         item["_reason"] = reason
         out.append(item)
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Similar sources — topic-co-occurrence based recommendations.
+# ─────────────────────────────────────────────────────────────────────────────
+def similar_sources(source, all_sources, limit=4):
+    """Return sources that share topics with the given source.
+
+    Approximates collaborative filtering using topic overlap since we do not
+    yet have cross-user follow data. Returns a list of source dicts.
+    """
+    src_topics = set(source.get("topics") or [])
+    if not src_topics:
+        return []
+    scored = []
+    for other in (all_sources or []):
+        if other is source:
+            continue
+        other_key = other.get("feed_url") or other.get("homepage_url") or other.get("name")
+        src_key = source.get("feed_url") or source.get("homepage_url") or source.get("name")
+        if other_key == src_key:
+            continue
+        other_topics = set(other.get("topics") or [])
+        overlap = src_topics & other_topics
+        if not overlap:
+            continue
+        jaccard = len(overlap) / max(1, len(src_topics | other_topics))
+        scored.append((jaccard, other))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    return [s for _, s in scored[:limit]]

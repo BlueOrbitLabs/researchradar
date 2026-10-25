@@ -971,6 +971,71 @@ def discover_sources_pubmed(domain: str) -> list:
         ),
     ]
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def discover_sources_arxiv(domain: str) -> list:
+    """arXiv RSS for research/tech/science domains. Real feed, no auth."""
+    research_kw = {"research", "science", "physics", "computer", "machine learning",
+                   "artificial intelligence", "mathematics", "quantum", "engineering",
+                   "biology", "chemistry", "statistics", "economics"}
+    if not any(kw in domain.lower() for kw in research_kw):
+        return []
+    q = urllib.parse.quote_plus(domain)
+    return [
+        _make_source(
+            name=f"arXiv — {domain}", source_type="repository", domain=domain,
+            description="Open-access preprints from arXiv.org covering physics, CS, math, and more.",
+            homepage_url="https://arxiv.org",
+            feed_url=f"https://export.arxiv.org/rss/search?query={q}&max_results=15",
+            feed_status="active", topics=[domain, "research", "preprint"]
+        ),
+    ]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def discover_sources_policy(domain: str) -> list:
+    """Policy/government sources for policy, government, public health domains."""
+    policy_kw = {"policy", "government", "public health", "regulation", "law",
+                 "governance", "politics", "legislation", "civic"}
+    if not any(kw in domain.lower() for kw in policy_kw):
+        return []
+    q = urllib.parse.quote_plus(domain)
+    sources = [
+        _make_source(
+            name="WHO — World Health Organization", source_type="institution", domain=domain,
+            description="Global health policies, guidelines and disease updates from WHO.",
+            homepage_url="https://www.who.int",
+            feed_url="https://www.who.int/rss-feeds/news-english.xml",
+            feed_status="active", topics=[domain, "health", "policy"]
+        ),
+    ]
+    # Add a Google News policy-focused feed
+    sources.append(_make_source(
+        name=f"Policy News — {domain}", source_type="news", domain=domain,
+        description=f"Policy and government developments about {domain}.",
+        homepage_url="https://news.google.com",
+        feed_url=f"https://news.google.com/rss/search?q={q}+policy+OR+government&hl=en&gl=US&ceid=US:en",
+        feed_status="active", topics=[domain, "policy", "government"]
+    ))
+    return sources
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def discover_sources_preprints(domain: str) -> list:
+    """Preprint servers for health/biology/medicine domains."""
+    health_kw = {"health", "medicine", "medical", "biology", "clinical", "disease",
+                 "epidemiology", "pharmaceutical", "neuroscience", "genomics"}
+    if not any(kw in domain.lower() for kw in health_kw):
+        return []
+    return [
+        _make_source(
+            name="medRxiv — Health Sciences Preprints", source_type="repository", domain=domain,
+            description="Preprints in health sciences from medRxiv.org.",
+            homepage_url="https://www.medrxiv.org",
+            feed_url="https://connect.medrxiv.org/relate/feed/181",
+            feed_status="active", topics=[domain, "health", "preprint", "medicine"]
+        ),
+    ]
+
 # ═══════════════════════════════════════════════════════════
 # LOCAL NEWS — Curated feed registry + discovery pipeline
 # ═══════════════════════════════════════════════════════════
@@ -1317,6 +1382,14 @@ def discover_sources_for_domain(domain: str) -> list:
         for src in discover_sources_pubmed(q):
             _add(src)
 
+    # Additional providers: arXiv, policy, preprints.
+    for src in discover_sources_arxiv(domain):
+        _add(src)
+    for src in discover_sources_policy(domain):
+        _add(src)
+    for src in discover_sources_preprints(domain):
+        _add(src)
+
     # Tag each source with the original domain for display consistency.
     for src in results:
         if not src.get("domain"):
@@ -1365,9 +1438,23 @@ def update_source_health(pool):
         if src:
             yield_counts[src] = yield_counts.get(src, 0) + 1
     st.session_state.source_yield = yield_counts
+    misses = st.session_state.get("source_miss_count", {})
+    followed = st.session_state.get("followed_sources", set())
+    cat = st.session_state.get("source_catalogue", {})
     for src, count in yield_counts.items():
         if count > 0:
             st.session_state.source_last_seen[src] = today
+            misses[src] = 0
+    # Increment miss count for followed sources with 0 yield this refresh.
+    for furl in list(followed):
+        sname = cat.get(furl, {}).get("name", furl)
+        if yield_counts.get(sname, 0) == 0:
+            misses[sname] = misses.get(sname, 0) + 1
+            # Auto-unfollow after 3 consecutive misses (dead source).
+            if misses[sname] >= 3:
+                followed.discard(furl)
+                misses[sname] = 0
+    st.session_state.source_miss_count = misses
     return yield_counts
 
 def source_health_label(source_name):
@@ -1493,6 +1580,8 @@ DEFAULTS = {
     "source_catalogue": {},       # {url: {name, source_type, domain, feed_url, status, ...}}
     "source_yield": {},           # {source_name: article_count} from last pool build
     "source_last_seen": {},       # {source_name: "YYYY-MM-DD"} last refresh with articles
+    "source_miss_count": {},       # {source_name: consecutive refreshes with 0 articles}
+    "recent_sources": set(),       # sources seen in the previous refresh (for novelty)
     "followed_sources": set(),    # set of feed_urls the user has explicitly followed
     "discover_domain": "",        # last domain searched in Discover Sources
     "discover_results": [],       # last discovery results
@@ -2468,7 +2557,8 @@ def _rank_for_you(pool, topics, subtopics):
                            preferences=_user_preferences(),
                            role=_user_role(),
                            reading_profile=_reading_profile(),
-                           followed_sources=st.session_state.get("followed_sources") or set())
+                           followed_sources=st.session_state.get("followed_sources") or set(),
+                           recent_sources=st.session_state.get("recent_sources") or set())
 
 def _rank_my_fields(pool, topics, subtopics, filter_topic=None):
     return fs.rank_my_fields(pool, topics, subtopics,
@@ -2476,14 +2566,16 @@ def _rank_my_fields(pool, topics, subtopics, filter_topic=None):
                              role=_user_role(),
                              filter_topic=filter_topic,
                              reading_profile=_reading_profile(),
-                             followed_sources=st.session_state.get("followed_sources") or set())
+                             followed_sources=st.session_state.get("followed_sources") or set(),
+                             recent_sources=st.session_state.get("recent_sources") or set())
 
 def _rank_emerging(pool, topics, subtopics):
     return fs.rank_emerging(pool, topics, subtopics,
                             preferences=_user_preferences(),
                             role=_user_role(),
                             reading_profile=_reading_profile(),
-                            followed_sources=st.session_state.get("followed_sources") or set())
+                            followed_sources=st.session_state.get("followed_sources") or set(),
+                            recent_sources=st.session_state.get("recent_sources") or set())
 
 def _rank_broaden(pool, topics, subtopics):
     return fs.rank_broaden(pool, topics, subtopics,
@@ -2491,7 +2583,8 @@ def _rank_broaden(pool, topics, subtopics):
                            role=_user_role(),
                            outside_topics=st.session_state.get("feed_discovery_topics") or [],
                            reading_profile=_reading_profile(),
-                           followed_sources=st.session_state.get("followed_sources") or set())
+                           followed_sources=st.session_state.get("followed_sources") or set(),
+                           recent_sources=st.session_state.get("recent_sources") or set())
 
 def check_ai_available():
     try: OpenAI(api_key=OPENAI_KEY); return True, ""
@@ -3281,6 +3374,8 @@ if st.session_state.get("feed_pool_key") != _pool_key or st.session_state.get("f
             load_topic_articles, _pool_topics, _pool_subtopics,
             discovery_topics=_discovery_topics,
         )
+    # Track sources from this refresh for novelty in the next one.
+    st.session_state.recent_sources = {a.get('source') for a in (_pool or []) if a.get('source')}
     st.session_state.feed_pool = _pool
     update_source_health(_pool)
     st.session_state.feed_pool_key = _pool_key
@@ -3469,6 +3564,18 @@ with main_col:
             shown = [s for s in results
                      if type_filter == "All" or s["source_type"].capitalize() == type_filter]
 
+        # Batch follow: follow all recommended sources in one click.
+        _batch_keys = [s.get("feed_url") or s.get("homepage_url") or s.get("name")
+                      for s in shown]
+        _unfollowed_batch = [k for k in _batch_keys
+                            if k not in st.session_state.followed_sources]
+        if _unfollowed_batch and st.button(
+                f"Follow all recommended ({len(_unfollowed_batch)})",
+                key="batch_follow", icon=":material/rss_feed:"):
+            for k in _unfollowed_batch:
+                st.session_state.followed_sources.add(k)
+            st.rerun()
+
         for src in shown:
             key = src.get("feed_url") or src.get("homepage_url") or src["name"]
             is_followed = key in st.session_state.followed_sources
@@ -3482,6 +3589,11 @@ with main_col:
                 _hl, _hc = source_health_label(src.get("name", ""))
                 st.markdown(f'<span style="color:{_hc};font-size:0.78rem;font-weight:600">{_hl}</span>',
                             unsafe_allow_html=True)
+                # Similar sources (topic co-occurrence).
+                _all_disc = st.session_state.get("discover_results", [])
+                _similar = fs.similar_sources(src, _all_disc, limit=3)
+                if _similar:
+                    st.caption("Similar: " + ", ".join(s.get("name", "") for s in _similar))
                 if src.get("description"):
                     st.markdown(f"*{src['description']}*")
                 c1, c2, c3 = st.columns([2, 2, 1])
