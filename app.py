@@ -2195,8 +2195,16 @@ html:has(.ow-dash) .st-key-ow-interests [data-testid="stIconMaterial"] {
 html:has(.ow-dash) .st-key-ow-interests button[kind="primary"] [data-testid="stIconMaterial"] {
   color: var(--blue) !important;
 }
-html:has(.ow-dash) .st-key-ow-interests { max-height: 28vh; overflow-y: auto; gap: 0 !important; padding: 0 !important; }
-html:has(.ow-dash) .st-key-ow-interests .stButton button { min-height: 26px !important; padding: 3px 9px !important; font-size: 0.68rem !important; gap: 8px !important; }
+html:has(.ow-dash) .st-key-ow-interests { max-height: 28vh; overflow-y: auto; gap: 2px !important; padding: 0 !important; }
+html:has(.ow-dash) .st-key-ow-interests .stButton button {
+  min-height: 26px !important; padding: 3px 9px !important; font-size: 0.68rem !important;
+  gap: 8px !important; align-items: center !important; line-height: 1.3 !important;
+}
+html:has(.ow-dash) .st-key-ow-interests .stButton button p {
+  font-size: inherit !important; font-weight: inherit !important;
+  color: inherit !important; margin: 0 !important;
+  line-height: 16px !important;
+}
 html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar { width: 5px; }
 html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
