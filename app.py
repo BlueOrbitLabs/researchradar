@@ -3579,11 +3579,6 @@ with sidebar_col:
                  use_container_width=True):
         st.session_state.screen = "interests"; st.rerun()
 
-    # Compact preference link (opens full editor on interests screen)
-    if st.button("Edit preferences", key="edit_prefs", icon=":material/tune:",
-                 use_container_width=True):
-        st.session_state.screen = "interests"; st.rerun()
-
 # ══════════════════════
 # MAIN CONTENT AREA — tabbed
 # ══════════════════════
