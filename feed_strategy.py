@@ -135,6 +135,7 @@ PREFERENCE_TYPES = {
     "Grants, fellowships & opportunities": {"grants"},
     "Exam-relevant current affairs": {"news", "policy"},
     "Practical explainers & background knowledge": {"explainer"},
+    "Organisations & institutions": {"research", "policy", "industry"},
     "General knowledge beyond my usual interests": {"explainer", "research", "news"},
     # Local news is intentionally excluded from the general feed strategies.
     "Local news & community updates": set(),
@@ -160,6 +161,10 @@ TYPE_PATTERNS = {
     "industry": re.compile(
         r"\b(industry|market|company|companies|startup|earnings|revenue|"
         r"merger|acquisition|product launch|sector|manufactur\w*)\b", re.I),
+    "organisation": re.compile(
+        r"\b(organization|organisation|institution|agency|foundation|ngo|"
+        r"university|institute|council|committee|who|unicef|united nations|"
+        r"world health|red cross|oxfam)\b", re.I),
 }
 
 RESEARCH_SOURCES = ("openalex", "pubmed", "europe pmc", "arxiv", "doaj",
@@ -167,13 +172,13 @@ RESEARCH_SOURCES = ("openalex", "pubmed", "europe pmc", "arxiv", "doaj",
 
 # Role -> affinity per content type. Soft signals, never restrictions.
 ROLE_AFFINITY = {
-    "phd": {"research": 1.0, "policy": 0.4, "explainer": 0.2},
+    "phd": {"research": 1.0, "policy": 0.4, "explainer": 0.2, "organisation": 0.5},
     "researcher": {"research": 1.0, "policy": 0.4, "explainer": 0.2},
     "faculty": {"research": 0.8, "explainer": 0.6, "policy": 0.3},
     "educator": {"research": 0.8, "explainer": 0.6, "policy": 0.3},
     "student": {"research": 0.6, "explainer": 0.8, "news": 0.3},
     "exam": {"news": 0.9, "policy": 0.8, "research": 0.2},
-    "professional": {"industry": 0.9, "research": 0.5, "news": 0.3},
+    "professional": {"industry": 0.9, "research": 0.5, "news": 0.3, "organisation": 0.4},
     "curious": {"explainer": 0.9, "research": 0.4, "news": 0.2},
 }
 
@@ -245,7 +250,7 @@ def source_quality(article):
 def infer_content_type(article):
     """Infer a coarse content type from metadata text (weak signal)."""
     declared = (article.get("content_type") or "").strip().lower()
-    if declared in {"research", "policy", "industry", "grants", "explainer", "news"}:
+    if declared in {"research", "policy", "industry", "grants", "explainer", "news", "organisation"}:
         return declared
 
     haystack = " ".join(filter(None, [
@@ -256,7 +261,7 @@ def infer_content_type(article):
         return "news"
 
     # Ordered: the most specific signals win over generic words.
-    for kind in ("grants", "policy", "research", "explainer", "industry"):
+    for kind in ("grants", "organisation", "policy", "research", "explainer", "industry"):
         if TYPE_PATTERNS[kind].search(haystack):
             return kind
     if any(research_source in haystack for research_source in RESEARCH_SOURCES):

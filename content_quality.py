@@ -566,7 +566,7 @@ def canonical_key(article):
     return "title:" + normalise(article.get("title"))
 
 
-def briefing_articles(pool, days=None, limit=3, today=None):
+def briefing_articles(pool, days=None, limit=3, today=None, preferences=None, role=None):
     """Eligible, deduplicated, recent articles for the daily briefing.
 
     Only records that pass the structural gate, carry a supported relevance
@@ -604,11 +604,26 @@ def briefing_articles(pool, days=None, limit=3, today=None):
         seen.add(key)
         eligible.append(article)
 
-    eligible.sort(
-        key=lambda a: (float(a.get("relevance") or 0),
-                       parse_date(a.get("date")) or date.min),
-        reverse=True,
-    )
+    # Preference/role-aware re-ranking: boost items matching the user's discovery
+    # preferences and role, but keep relevance+freshness as the base signal.
+    if preferences or role:
+        def _brief_score(a):
+            base = float(a.get("relevance") or 0)
+            # preference_match is in feed_strategy; import lazily to avoid cycle.
+            try:
+                import feed_strategy as _fs
+                pref = _fs.preference_match(a, preferences or [])
+                prof = _fs.profile_affinity(a, role)
+            except Exception:
+                pref = 0.0; prof = 0.0
+            return base + 0.15 * pref + 0.10 * prof
+        eligible.sort(key=_brief_score, reverse=True)
+    else:
+        eligible.sort(
+            key=lambda a: (float(a.get("relevance") or 0),
+                           parse_date(a.get("date")) or date.min),
+            reverse=True,
+        )
     return {
         "items": eligible[:limit],
         "total": len(eligible),

@@ -3049,6 +3049,7 @@ if st.session_state.screen == "discover_prefs":
             ("🏛️", "Government policies & official reports",    "Policy documents and official announcements"),
             ("🏭", "Industry & professional developments",      "Sector news and professional insights"),
             ("🏆", "Grants, fellowships & opportunities",       "Funding, scholarships and career opportunities"),
+            ("🏢", "Organisations & institutions",              "WHO, UNICEF, universities, agencies"),
             ("📚", "Exam-relevant current affairs",             "News relevant to competitive exams"),
             ("💡", "Practical explainers & background knowledge","In-depth explainers and how-things-work"),
             ("🔍", "General knowledge beyond my usual interests","Broaden perspective with diverse topics"),
@@ -3394,7 +3395,8 @@ domain_articles = [a for a in feed_pool
                    if a.get("relevance", 0) >= cq.RELEVANCE["min_feed"]]
 # Daily briefing: eligible, deduplicated, dated inside the window. Counts shown
 # to the user are derived from this same list.
-briefing = cq.briefing_articles(feed_pool)
+briefing = cq.briefing_articles(feed_pool, preferences=_user_preferences(),
+                                 role=_user_role())
 
 # ── 2-column layout: sidebar + main ──
 st.markdown('<div class="ow-dash"></div>', unsafe_allow_html=True)
@@ -3710,7 +3712,9 @@ with main_col:
     today_long = datetime.now().strftime("%A, %d %B %Y")
     st.markdown(f'<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">{today_long} · Personalised for your topics</div>', unsafe_allow_html=True)
 
-    briefing_tab = cq.briefing_articles(feed_pool, limit=12)
+    briefing_tab = cq.briefing_articles(feed_pool, limit=12,
+                                       preferences=_user_preferences(),
+                                       role=_user_role())
     top_arts = briefing_tab["items"]
     if not top_arts:
         st.info("No eligible articles from the last 7 days yet — add some topics or retry later.")
