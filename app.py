@@ -2209,12 +2209,19 @@ html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar { width: 5px; }
 html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 /* Secondary text actions (Manage interests / Settings) */
-html:has(.ow-dash) .st-key-manage_interests button,
+html:has(.ow-dash) .st-key-manage_interests button {
+  justify-content: flex-start !important; background: transparent !important;
+  border: none !important; box-shadow: none !important;
+  color: var(--blue) !important; font-size: 0.72rem !important;
+  font-weight: 500 !important; padding: 4px 9px !important;
+  min-height: 20px !important; line-height: 16px !important;
+  margin-top: 6px !important;
+}
 html:has(.ow-dash) .st-key-settings_btn button {
   justify-content: flex-start !important; background: transparent !important;
   border: none !important; box-shadow: none !important;
-  color: var(--blue) !important; font-size: 0.68rem !important;
-  font-weight: 600 !important; padding: 4px 9px !important;
+  color: var(--muted) !important; font-size: 0.68rem !important;
+  font-weight: 500 !important; padding: 4px 9px !important;
   min-height: 26px !important;
 }
 html:has(.ow-dash) .st-key-settings_btn button { color: var(--muted) !important; font-weight: 500 !important; }
