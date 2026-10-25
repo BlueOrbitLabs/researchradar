@@ -2346,7 +2346,7 @@ html:has(.ow-dash) [class*="st-key-art-"] {
   background: #FFFFFF !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--card-radius) !important;
-  padding: 10px 12px 8px !important;
+  padding: 12px !important;
   box-shadow: 0 1px 2px rgba(24,38,83,0.04) !important;
   gap: 4px !important;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -2360,7 +2360,7 @@ html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.7
 .ow-card-read-flag { display: none; }
 .ow-card-meta {
   display: flex; align-items: center; flex-wrap: wrap; gap: 5px;
-  font-size: 0.62rem; color: var(--meta); margin-bottom: 2px;
+  font-size: 0.7rem; color: var(--meta); margin-bottom: 3px;
 }
 .ow-card-publisher { color: var(--muted); font-weight: 600; }
 .ow-card-date { color: var(--meta); }
@@ -2373,15 +2373,16 @@ html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.7
 .ow-card-badge.relevant { background: var(--warning-bg); color: var(--warning); }
 .ow-card-badge.read { background: var(--soft-blue); color: var(--muted); }
 .ow-card-title {
-  display: block; font-size: 0.8rem; font-weight: 650; color: var(--navy) !important;
+  display: block; font-size: 0.95rem; font-weight: 650; color: var(--navy) !important;
   max-width: 100%;
-  line-height: 1.4; text-decoration: none !important; letter-spacing: -0.006em;
-  margin: 1px 0 4px;
+  line-height: 1.35; text-decoration: none !important; letter-spacing: -0.006em;
+  margin: 1px 0 5px; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
 }
 .ow-card-title:hover { color: var(--blue) !important; }
 .ow-card-summary {
-  font-size: 0.68rem; color: var(--muted); line-height: 1.4;
-  margin: 0 0 6px; display: -webkit-box; -webkit-line-clamp: 2;
+  font-size: 0.78rem; color: var(--muted); line-height: 1.45;
+  margin: 0 0 7px; display: -webkit-box; -webkit-line-clamp: 2;
   max-width: 100%;
   -webkit-box-orient: vertical; overflow: hidden;
 }
@@ -2390,7 +2391,7 @@ html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.7
   display: inline-flex; align-items: center;
   background: var(--chip-blue-bg); border: 1px solid #DCE6FF;
   color: var(--chip-blue-text); border-radius: 999px; padding: 2px 8px;
-  font-size: 0.6rem; font-weight: 600; line-height: 1.5;
+  font-size: 0.66rem; font-weight: 600; line-height: 1.5;
 }
 /* Empty / failure states keep the same reading surface as a card */
 .ow-empty {
@@ -2427,21 +2428,21 @@ html:has(.ow-dash) [class*="st-key-art-"] [data-testid="stHorizontalBlock"]:has(
 
 /* In-card action row: light bordered chips, not dark blocks */
 html:has(.ow-dash) [class*="st-key-ow-actions-"] {
-  gap: 4px !important; flex-wrap: wrap !important; margin-top: 4px;
+  gap: 5px !important; flex-wrap: wrap !important; margin-top: 8px;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] [data-testid="stElementContainer"] {
   width: auto !important; flex: 0 0 auto !important;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button {
-  width: auto !important; min-height: 22px !important; height: 22px !important;
+  width: auto !important; min-height: 26px !important; height: 26px !important;
   background: #FFFFFF !important; border: 1px solid var(--border) !important;
   border-radius: 7px !important; color: var(--blue) !important;
-  font-size: 0.62rem !important; font-weight: 600 !important;
+  font-size: 0.68rem !important; font-weight: 600 !important;
   padding: 0 9px !important; box-shadow: none !important;
   white-space: nowrap !important; gap: 4px !important;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button p {
-  font-size: 0.62rem !important; font-weight: 600 !important; color: inherit !important;
+  font-size: 0.68rem !important; font-weight: 600 !important; color: inherit !important;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button [data-testid="stIconMaterial"] {
   font-size: 15px !important; color: inherit !important;
@@ -2484,6 +2485,22 @@ html:has(.ow-dash) [class*="st-key-art-"] img {
   border-radius: 8px !important; object-fit: cover !important;
   display: block !important;
 }
+.ow-card-thumb {
+  position: relative; width: 100%; aspect-ratio: 3 / 2; min-height: 84px;
+  overflow: hidden; border-radius: 8px;
+  background: linear-gradient(135deg, #EDF3FF 0%, #F5F8FE 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.ow-card-thumb img:not(.ow-card-brand-mark) {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
+.ow-card-brand-mark { position: relative; width: 30px !important; height: 30px !important; object-fit: contain !important; opacity: 0.22; }
+.ow-card-thumb-mark {
+  position: relative; width: 38px; height: 38px; display: grid; place-items: center;
+  border-radius: 12px; background: rgba(255,255,255,0.72);
+  box-shadow: 0 1px 3px rgba(16,42,143,0.06);
+  font-size: 1.35rem; line-height: 1; opacity: 0.88;
+}
 
 /* Overflow menu trigger (more_horiz) */
 html:has(.ow-dash) [class*="st-key-more-"] button {
@@ -2496,6 +2513,9 @@ html:has(.ow-dash) [class*="st-key-more-"] button {
 html:has(.ow-dash) [class*="st-key-more-"] button p { display: none !important; }
 html:has(.ow-dash) [class*="st-key-more-"] button [data-testid="stIconMaterial"] {
   font-size: 16px !important; color: inherit !important;
+}
+html:has(.ow-dash) [class*="st-key-more-"] [data-testid="stPopoverButton"] > div > div[aria-hidden="true"] {
+  display: none !important;
 }
 html:has(.ow-dash) [class*="st-key-more-"] button:hover {
   background: var(--soft-blue) !important; color: var(--blue) !important;
@@ -2609,6 +2629,29 @@ def topic_icon(name):
     # Generic icon for any custom/unknown topic
     generic = ["🔬","🧬","🌐","⚡","🛠","📡","🏛","🌱","⚖️","🎯","🏔","🎓","🔭","🧲","📊"]
     return generic[abs(hash(name)) % len(generic)]
+
+def _article_placeholder_mark(topic):
+    """Return a reliable, card-only mark for image-free article thumbnails.
+
+    Generic topic_icon() intentionally supports arbitrary interests and can
+    return an arbitrary emoji for custom topics. For thumbnails, only use
+    clear subject mappings; unknown topics use the neutral Owlume brand mark.
+    """
+    value = (topic or "").strip().lower()
+    mappings = (
+        (("health & medicine", "public health", "global health", "health economics",
+          "healthcare", "medicine", "clinical"), "🏥"),
+        (("science & research", "science", "research", "physics", "biology"), "🔬"),
+        (("ai & technology", "artificial intelligence", "technology", "computing"), "🤖"),
+        (("climate & environment", "climate", "environment", "energy"), "🌱"),
+        (("policy & government", "government", "policy", "law"), "🏛️"),
+        (("finance & markets", "economics", "finance", "markets"), "📊"),
+        (("education", "careers", "learning"), "🎓"),
+    )
+    for names, mark in mappings:
+        if any(name in value for name in names):
+            return mark
+    return ""
 
 def all_topics_for_user():
     return st.session_state.selected_topics + st.session_state.custom_topics
@@ -4283,24 +4326,20 @@ with main_col:
 
             with st.container(key=f"art-{ak}"):
                 _img_url = art.get("image", "") or ""
-                _c_img, _c_head, _c_save = st.columns([1.2, 7.5, 1], gap="small")
+                _placeholder_mark = _article_placeholder_mark(art.get("topic", ""))
+                _c_img, _c_head, _c_controls = st.columns([1.5, 8.0, 0.7], gap="small")
                 with _c_img:
-                    _topic_ico = topic_icon(art.get("topic", ""))
+                    _mark_html = (f'<span class="ow-card-thumb-mark">{_html.escape(_placeholder_mark)}</span>'
+                                  if _placeholder_mark else
+                                  f'<img class="ow-card-brand-mark" src="data:image/png;base64,{LOGO_B64}" alt="Owlume" loading="lazy">')
                     if _img_url:
-                        st.markdown(f'<div style="width:100%;height:92px;border-radius:8px;overflow:hidden;'
-                                    f'background:linear-gradient(135deg,#EDF3FF 0%,#F5F8FE 100%);'
-                                    f'display:flex;align-items:center;justify-content:center;">'
+                        st.markdown(f'<div class="ow-card-thumb">{_mark_html}'
                                     f'<img src="{_html.escape(_img_url, quote=True)}" '
-                                    f'style="width:100%;height:92px;object-fit:cover;border-radius:8px;" '
-                                    f'alt="" loading="lazy" '
-                                    f'onerror="this.style.display=\'none\'"></div>', unsafe_allow_html=True)
+                                    f'alt="" loading="lazy" onerror="this.style.display=\'none\'"></div>',
+                                    unsafe_allow_html=True)
                     else:
-                        st.markdown(f'<div style="width:100%;height:92px;'
-                                    f'background:linear-gradient(135deg,#EDF3FF 0%,#F5F8FE 100%);'
-                                    f'border-radius:8px;display:flex;align-items:center;'
-                                    f'justify-content:center;font-size:1.6rem;opacity:0.45;">'
-                                    f'{_topic_ico}</div>', unsafe_allow_html=True)
-
+                        st.markdown(f'<div class="ow-card-thumb">{_mark_html}</div>',
+                                    unsafe_allow_html=True)
                 with _c_head:
                     st.markdown(f'''
                     {read_flag}
@@ -4313,82 +4352,77 @@ with main_col:
                        target="_blank" rel="noopener noreferrer">{_html.escape(title)}</a>
                     {summary_html}
                     {chips_block}''', unsafe_allow_html=True)
-                with _c_save:
-                    if st.button("Saved" if is_bm else "Save", key=f"save-{ak}",
-                                 icon=":material/bookmark:" if is_bm else ":material/bookmark_border:",
-                                 help="Remove from saved library" if is_bm else "Save to your library",
-                                 type="primary" if is_bm else "secondary"):
-                        if is_bm:
-                            remove_bookmark(url)
-                        else:
-                            add_bookmark(art)
-                            add_to_library(art)
-                        st.rerun()
-
-                with st.container(key=f"ow-actions-{ak}", horizontal=True, gap="small"):
-                    if st.button("AI summary", key=f"sum-{ak}", icon=":material/summarize:",
-                                 help="3-sentence AI summary"):
-                        with st.spinner("Summarising…"):
-                            result = _openai_call(build_summary_prompt(title, summary), mode="Digest")
-                        st.session_state[f"inline_result_{ak}"] = _ai_display(result)
-                        st.session_state[f"inline_type_{ak}"] = "summary"
-                        st.rerun()
-                    if st.button("Key takeaways", key=f"tkw-{ak}", icon=":material/key:",
-                                 help="Key takeaways as bullet points"):
-                        with st.spinner("Extracting takeaways…"):
-                            result = _openai_call(build_takeaways_prompt(title, summary), mode="Digest")
-                        st.session_state[f"inline_result_{ak}"] = _ai_display(result)
-                        st.session_state[f"inline_type_{ak}"] = "takeaways"
-                        st.rerun()
-                    if st.button("Why it matters", key=f"wim-{ak}", icon=":material/lightbulb:",
-                                 help="Broader significance and implications"):
-                        with st.spinner("Analysing significance…"):
-                            result = _openai_call(build_why_matters_prompt(title, summary), mode="Digest")
-                        st.session_state[f"inline_result_{ak}"] = _ai_display(result)
-                        st.session_state[f"inline_type_{ak}"] = "why_matters"
-                        st.rerun()
-                    if st.button("Ask Owlume", key=f"ask_art-{ak}", icon=":material/forum:",
-                                 help="Ask Owlume about this article"):
-                        st.session_state.chat_history = [
-                            {"role": "user", "content": f"Tell me more about: {title}"}
-                        ]
-                        _navigate("ask")
-                        st.rerun()
-
-                # Secondary actions — compact overflow menu.
-                with st.popover("", icon=":material/more_horiz:", key=f"more-{ak}",
-                                help="More actions"):
-                    if st.button("Read" if is_read else "Mark read", key=f"rd-{ak}",
-                                 icon=":material/check_circle:" if is_read else ":material/visibility:",
-                                 help="Mark as unread" if is_read else "Mark as read",
-                                 use_container_width=True):
-                        if is_read:
-                            st.session_state.read_articles.discard(url)
-                        else:
-                            st.session_state.read_articles.add(url)
-                            add_to_library(art)
-                        st.rerun()
-                    _src_name = source
-                    if _src_name and _src_name not in st.session_state.followed_sources:
-                        if st.button("Follow source", key=f"follow-{ak}",
-                                     icon=":material/rss_feed:",
-                                     help=f"Follow {_src_name}",
-                                     use_container_width=True):
-                            st.session_state.followed_sources.add(_src_name)
+                    with st.container(key=f"ow-actions-{ak}", horizontal=True, gap="small"):
+                        if st.button("AI summary", key=f"sum-{ak}", icon=":material/summarize:",
+                                     help="3-sentence AI summary"):
+                            with st.spinner("Summarising…"):
+                                result = _openai_call(build_summary_prompt(title, summary), mode="Digest")
+                            st.session_state[f"inline_result_{ak}"] = _ai_display(result)
+                            st.session_state[f"inline_type_{ak}"] = "summary"
                             st.rerun()
-                    _fb_key = f"{art.get('topic','')}::{_src_name}"
-                    if st.button("Less like this", key=f"less-{ak}",
-                                 icon=":material/thumb_down:",
-                                 help="Show fewer like this",
-                                 use_container_width=True):
-                        st.session_state.negative_feedback.add(_fb_key)
-                        st.rerun()
-                    if st.button("Not relevant", key=f"notrel-{ak}",
-                                 icon=":material/block:",
-                                 help="Mark as not relevant",
-                                 use_container_width=True):
-                        st.session_state.negative_feedback.add(_fb_key)
-                        st.rerun()
+                        if st.button("Key takeaways", key=f"tkw-{ak}", icon=":material/key:",
+                                     help="Key takeaways as bullet points"):
+                            with st.spinner("Extracting takeaways…"):
+                                result = _openai_call(build_takeaways_prompt(title, summary), mode="Digest")
+                            st.session_state[f"inline_result_{ak}"] = _ai_display(result)
+                            st.session_state[f"inline_type_{ak}"] = "takeaways"
+                            st.rerun()
+                        if st.button("Why it matters", key=f"wim-{ak}", icon=":material/lightbulb:",
+                                     help="Broader significance and implications"):
+                            with st.spinner("Analysing significance…"):
+                                result = _openai_call(build_why_matters_prompt(title, summary), mode="Digest")
+                            st.session_state[f"inline_result_{ak}"] = _ai_display(result)
+                            st.session_state[f"inline_type_{ak}"] = "why_matters"
+                            st.rerun()
+                        if st.button("Ask Owlume", key=f"ask_art-{ak}", icon=":material/forum:",
+                                     help="Ask Owlume about this article"):
+                            st.session_state.chat_history = [
+                                {"role": "user", "content": f"Tell me more about: {title}"}
+                            ]
+                            _navigate("ask")
+                            st.rerun()
+                with _c_controls:
+                    with st.container(key=f"ow-card-controls-{ak}", horizontal=True, gap="small"):
+                        if st.button("Saved" if is_bm else "Save", key=f"save-{ak}",
+                                     icon=":material/bookmark:" if is_bm else ":material/bookmark_border:",
+                                     help="Remove from saved library" if is_bm else "Save to your library",
+                                     type="primary" if is_bm else "secondary"):
+                            if is_bm:
+                                remove_bookmark(url)
+                            else:
+                                add_bookmark(art)
+                                add_to_library(art)
+                            st.rerun()
+                        with st.popover("", icon=":material/more_horiz:", key=f"more-{ak}",
+                                        help="More actions"):
+                            if st.button("Read" if is_read else "Mark read", key=f"rd-{ak}",
+                                         icon=":material/check_circle:" if is_read else ":material/visibility:",
+                                         help="Mark as unread" if is_read else "Mark as read",
+                                         use_container_width=True):
+                                if is_read:
+                                    st.session_state.read_articles.discard(url)
+                                else:
+                                    st.session_state.read_articles.add(url)
+                                    add_to_library(art)
+                                st.rerun()
+                            _src_name = source
+                            if _src_name and _src_name not in st.session_state.followed_sources:
+                                if st.button("Follow source", key=f"follow-{ak}",
+                                             icon=":material/rss_feed:", help=f"Follow {_src_name}",
+                                             use_container_width=True):
+                                    st.session_state.followed_sources.add(_src_name)
+                                    st.rerun()
+                            _fb_key = f"{art.get('topic','')}::{_src_name}"
+                            if st.button("Less like this", key=f"less-{ak}",
+                                         icon=":material/thumb_down:", help="Show fewer like this",
+                                         use_container_width=True):
+                                st.session_state.negative_feedback.add(_fb_key)
+                                st.rerun()
+                            if st.button("Not relevant", key=f"notrel-{ak}",
+                                         icon=":material/block:", help="Mark as not relevant",
+                                         use_container_width=True):
+                                st.session_state.negative_feedback.add(_fb_key)
+                                st.rerun()
 
                 # Inline AI result — revealed on demand, cached in session state.
                 ir_key = f"inline_result_{ak}"
