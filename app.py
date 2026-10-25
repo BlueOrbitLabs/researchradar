@@ -4232,8 +4232,9 @@ with main_col:
             _pub = cq.parse_date(art.get("date"))
             _is_historical = False
             if _pub:
-                from datetime import date as _d
-                if (_d.today() - _pub.date()).days > 365:
+                from datetime import date as _d, datetime as _dt
+                _pub_date = _pub.date() if isinstance(_pub, _dt) else _pub
+                if (_d.today() - _pub_date).days > 365:
                     _is_historical = True
             if _is_historical:
                 rel_badge += '<span class="ow-card-badge" style="background:#F1F5F9;color:#64748B;">Historical</span>'
