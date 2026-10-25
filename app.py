@@ -2157,9 +2157,12 @@ html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) > [data-test
   margin: 6px 9px 2px;
 }
 
+/* Reduce nav container gap */
+html:has(.ow-dash) .st-key-ow-nav { gap: 2px !important; }
+
 /* Sidebar navigation + interest buttons: compact, light, never filled black */
 html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) .stButton button {
-  width: 100% !important; min-height: 29px !important; height: auto !important;
+  width: 100% !important; min-height: 30px !important; height: auto !important;
   justify-content: flex-start !important; text-align: left !important;
   background: transparent !important; border: 1px solid transparent !important;
   border-radius: 8px !important; box-shadow: none !important;
@@ -3523,7 +3526,7 @@ with sidebar_col:
             _navigate(tab_id, strategy)
             st.rerun()
 
-    with st.container(key="ow-nav"):
+    with st.container(key="ow-nav", gap=0):
         _nav_btn("My Feed", ":material/space_dashboard:", "feed", "for_you",
                  _cur_tab == "feed" and _cur_strategy == "for_you")
         _nav_btn("Discover", ":material/travel_explore:", "discover", None,
