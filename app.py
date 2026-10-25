@@ -1,6 +1,7 @@
 """Owlume — Your personal knowledge feed."""
 import streamlit as st
-import feedparser, requests, re, json, urllib.parse, difflib
+import feedparser, requests, re, json, urllib.parse, difflib, hashlib
+import html as _html
 import logging
 from datetime import datetime
 import datetime as dt
@@ -1425,6 +1426,7 @@ if _nav_changed:
 # ═══════════════════════════════════════════════════════════
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
@@ -1439,22 +1441,36 @@ html, body, .stApp { background: #FAFBFD !important; }
 [data-testid="stDecoration"]             { display: none !important; }
 
 :root {
-  /* ── Owlume Design Tokens ── */
-  --navy:       #1a1a6e;          /* brand navy — headings, sidebar brand */
-  --blue:       #3B5FEF;          /* primary action blue */
-  --hover-blue: #2957D9;          /* button / link hover */
-  --violet:     #7048e8;          /* gradient accent */
+  /* ── Owlume Design Tokens (Phase 1C visual system) ── */
+  --navy:       #182653;          /* primary text / brand */
+  --blue:       #3D5AFE;          /* primary interactive blue */
+  --hover-blue: #2F49E8;          /* hover */
+  --violet:     #5B74FF;          /* gradient highlight only */
   --cyan:       #0891b2;
-  --bg:         #FAFBFD;          /* main page background */
-  --card:       #FFFFFF;          /* cards and reading surfaces */
-  --border:     #E2E8F0;          /* borders and dividers */
+  --bg:         #F5F7FC;          /* app background */
+  --card:       #FFFFFF;          /* cards / reading surfaces */
+  --border:     #E0E7F1;          /* borders */
+  --divider:    #EDF1F7;          /* subtle dividers */
   --muted:      #64748B;          /* secondary text */
-  --text:       #1F2937;          /* primary text / headings */
-  --accent-bg:  #E9F0FF;          /* subtle highlighted surfaces */
-  --success:    #16A34A;
-  --warning:    #F59E0B;
-  --error:      #EF4444;
-  --info:       #3B82F6;
+  --meta:       #8493AD;          /* metadata */
+  --text:       #182653;          /* primary text */
+  --accent-bg:  #EAF0FF;          /* selected / pale blue */
+  --soft-blue:  #F0F5FF;          /* soft informational surface */
+  --success:    #15803D;
+  --success-bg: #DCFCE7;
+  --warning:    #B45309;
+  --warning-bg: #FEF3C7;
+  --error:      #DC2626;
+  --info:       #3D5AFE;
+  --card-radius: 14px;
+  --control-radius: 10px;
+}
+
+html, body, .stApp, button, input, textarea, select,
+[data-testid="stMarkdownContainer"] {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Helvetica, Arial, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
 }
 
 body, .stApp { background: var(--bg) !important; color: var(--text) !important; }
@@ -1473,7 +1489,7 @@ html:has(.ow-screen-welcome) .block-container {
   padding-left: 0 !important; padding-right: 0 !important;
   max-width: 100% !important;
 }
-html:has(.ow-screen-welcome) [data-testid="column"] { padding: 0 !important; }
+html:has(.ow-screen-welcome) [data-testid="stColumn"] { padding: 0 !important; }
 html:has(.ow-screen-welcome) [data-testid="stHorizontalBlock"] { gap: 0 !important; align-items: center !important; }
 
 /* Hero primary CTA button */
@@ -1651,18 +1667,18 @@ html:has(.ow-selection-screen) button[kind="primary"]::after {
 .ow-briefing-sub { font-size: 0.85rem; opacity: 0.8; }
 .ow-briefing-item { font-size: 0.83rem; margin: 5px 0; line-height: 1.4; padding-left: 2px; }
 
-/* Article card */
+/* Article card (shared by feed, briefing, saved and local views) */
 .ow-art-card {
-  background: white; border-radius: 12px; padding: 16px;
+  background: white; border-radius: var(--card-radius); padding: 15px 16px;
   border: 1px solid var(--border); margin-bottom: 12px;
-  transition: box-shadow 0.15s; cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.ow-art-card:hover { box-shadow: 0 4px 16px rgba(59,95,239,0.10); }
-.ow-art-source { font-size: 0.78rem; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
-.ow-art-title { font-size: 0.98rem; font-weight: 600; color: var(--text); line-height: 1.4;
-  margin-bottom: 6px; text-decoration: none; }
+.ow-art-card:hover { border-color: #C9D6EA; box-shadow: 0 6px 18px rgba(24,38,83,0.06); }
+.ow-art-source { font-size: 0.79rem; color: var(--meta); font-weight: 500; margin-bottom: 5px; }
+.ow-art-title { font-size: 1.06rem; font-weight: 600; color: var(--text); line-height: 1.45;
+  margin-bottom: 6px; text-decoration: none; display: block; }
 .ow-art-title:hover { color: var(--blue); }
-.ow-art-summary { font-size: 0.85rem; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+.ow-art-summary { font-size: 0.88rem; color: var(--muted); line-height: 1.55; margin-bottom: 10px; }
 .ow-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .ow-art-chip {
   display: inline-flex; align-items: center; gap: 4px;
@@ -1685,7 +1701,7 @@ html:has(.ow-selection-screen) button[kind="primary"]::after {
   width: 340px; flex-shrink: 0; background: white;
   border-left: 1px solid var(--border); padding: 20px; overflow-y: auto;
 }
-.ow-panel-h { font-size: 1rem; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.ow-panel-h { font-size: 1.55rem; font-weight: 800; color: var(--navy); margin-bottom: 4px; letter-spacing: -0.015em; }
 .ow-panel-sub { font-size: 0.83rem; color: var(--muted); margin-bottom: 16px; }
 .ow-panel-content { font-size: 0.88rem; color: var(--text); line-height: 1.6; }
 .ow-suggestion-chip {
@@ -1733,9 +1749,11 @@ html:has(.ow-selection-screen) button[kind="primary"]::after {
   font-size: 0.8rem; color: var(--muted); margin-bottom: 16px;
   display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
 }
-/* Article cards in the feed */
-.ow-art-title { font-size: 1rem; font-weight: 600; color: var(--text); line-height: 1.45; }
-.ow-art-summary { font-size: 0.88rem; color: var(--muted); line-height: 1.65; }
+/* Reading + metadata typography for article detail views */
+.ow-art-meta {
+  font-size: 0.8rem; color: var(--muted); margin-bottom: 16px;
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+}
 
 /* ── Global Streamlit button refresh ── */
 /* Make Streamlit's primary buttons use the design-token blue */
@@ -1827,7 +1845,7 @@ html:has(.ow-ob-h2) .stButton button {
 
 /* 4. Save / Set / Add buttons — prevent truncation.
       These live in a narrow [5,1] column; min-width ensures label fits. */
-html:has(.ow-ob-h2) [data-testid="column"]:last-child .stButton button {
+html:has(.ow-ob-h2) [data-testid="stColumn"]:last-child .stButton button {
   min-width: 72px !important;
   white-space: nowrap !important;
   padding-left: 10px !important;
@@ -1840,6 +1858,420 @@ html:has(.ow-ob-h2) .ow-subtopic-block { margin-top: 16px !important; }
 html:has(.ow-ob-h2) .ow-local-section { margin-top: 16px !important; }
 html:has(.ow-ob-h2) .ow-cant-find { margin-top: 16px !important; }
 html:has(.ow-ob-h2) .ow-selected-strip { margin-top: 12px !important; }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   DASHBOARD — Phase 1C visual system
+   Everything here is scoped to html:has(.ow-dash) so onboarding screens are
+   untouched. Streamlit framework defaults are overridden only where needed,
+   inside a named container, so global widget rules cannot leak between views.
+   ═════════════════════════════════════════════════════════════════════════ */
+.ow-dash { display: none; }
+html:has(.ow-dash) [data-testid="stAppViewContainer"],
+html:has(.ow-dash) [data-testid="stMain"] { background: var(--bg) !important; }
+html:has(.ow-dash) .block-container { padding: 0 !important; max-width: 100% !important; }
+html:has(.ow-dash) [data-testid="stAppViewContainer"] { overflow-x: hidden; }
+
+/* ── Two-column shell ─────────────────────────────────────────────────── */
+/* Markers are zero-size, non-visual hooks used only to scope CSS to the
+   dashboard shell without wrapping the whole layout in extra containers. */
+html:has(.ow-dash) [data-testid="stElementContainer"]:has(> .stMarkdown .ow-dash),
+html:has(.ow-dash) [data-testid="stElementContainer"]:has(> .stMarkdown .ow-sidebar-marker),
+html:has(.ow-dash) [data-testid="stElementContainer"]:has(> .stMarkdown .ow-main-marker) {
+  display: none !important;
+}
+html:has(.ow-dash) [data-testid="stHorizontalBlock"]:has(.ow-sidebar-marker) {
+  gap: 0 !important; align-items: stretch !important;
+}
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) {
+  flex: 0 0 204px !important; width: 204px !important; max-width: 204px !important;
+  padding: 16px 12px 22px !important; background: #FFFFFF !important;
+  border-right: 1px solid var(--border) !important;
+  position: sticky !important; top: 0 !important; align-self: flex-start !important;
+  height: 100vh; overflow-y: auto;
+}
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-main-marker) {
+  flex: 1 1 auto !important; min-width: 0 !important;
+  padding: 18px 22px 44px !important;
+}
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-main-marker) > [data-testid="stVerticalBlock"] {
+  gap: 12px !important;
+}
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) > [data-testid="stVerticalBlock"] {
+  gap: 2px !important;
+}
+
+/* ── Sidebar brand ────────────────────────────────────────────────────── */
+.ow-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 8px 15px; margin-bottom: 10px;
+  border-bottom: 1px solid var(--divider);
+}
+.ow-brand img { width: 30px; height: 30px; border-radius: 8px; display: block; }
+.ow-brand-name { font-size: 1.28rem; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.ow-sb-label {
+  font-size: 0.68rem; font-weight: 700; color: var(--meta);
+  text-transform: uppercase; letter-spacing: 0.09em;
+  margin: 14px 9px 5px;
+}
+
+/* Sidebar navigation + interest buttons: compact, light, never filled black */
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) .stButton button {
+  width: 100% !important; min-height: 36px !important; height: auto !important;
+  justify-content: flex-start !important; text-align: left !important;
+  background: transparent !important; border: 1px solid transparent !important;
+  border-radius: 9px !important; box-shadow: none !important;
+  color: var(--navy) !important; font-size: 0.86rem !important;
+  font-weight: 500 !important; padding: 8px 10px !important;
+  gap: 9px !important; line-height: 1.3 !important;
+}
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) .stButton button p {
+  font-size: inherit !important; font-weight: inherit !important;
+  color: inherit !important; margin: 0 !important;
+}
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) .stButton button:hover {
+  background: var(--soft-blue) !important; color: var(--blue) !important;
+}
+/* Only the active view/interest gets the pale-blue selected treatment */
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) .stButton button[kind="primary"] {
+  background: var(--accent-bg) !important; color: var(--blue) !important;
+  border-color: #DCE6FF !important; font-weight: 600 !important;
+  box-shadow: inset 2px 0 0 var(--blue) !important;
+}
+html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) [data-testid="stIconMaterial"] {
+  color: inherit !important; font-size: 18px !important;
+}
+html:has(.ow-dash) .st-key-ow-interests [data-testid="stIconMaterial"] {
+  color: var(--meta) !important; font-size: 9px !important;
+}
+html:has(.ow-dash) .st-key-ow-interests button[kind="primary"] [data-testid="stIconMaterial"] {
+  color: var(--blue) !important;
+}
+html:has(.ow-dash) .st-key-ow-interests { max-height: 30vh; overflow-y: auto; gap: 0 !important; }
+html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar { width: 5px; }
+html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* Secondary text actions (Manage interests / Settings) */
+html:has(.ow-dash) .st-key-manage_interests button,
+html:has(.ow-dash) .st-key-settings_btn button {
+  justify-content: flex-start !important; background: transparent !important;
+  border: none !important; box-shadow: none !important;
+  color: var(--blue) !important; font-size: 0.81rem !important;
+  font-weight: 600 !important; padding: 7px 9px !important;
+  min-height: 30px !important;
+}
+html:has(.ow-dash) .st-key-settings_btn button { color: var(--muted) !important; font-weight: 500 !important; }
+html:has(.ow-dash) .st-key-manage_interests button:hover { background: var(--soft-blue) !important; }
+html:has(.ow-dash) .st-key-settings_btn button:hover { color: var(--blue) !important; }
+.ow-sb-divider { height: 1px; background: var(--divider); margin: 12px 8px 6px; }
+
+/* ── Top toolbar ──────────────────────────────────────────────────────── */
+html:has(.ow-dash) .st-key-ow-topbar [data-testid="stHorizontalBlock"] {
+  align-items: center !important; gap: 10px !important;
+}
+html:has(.ow-dash) .st-key-ow-topbar [data-testid="stTextInput"] div[data-testid="stTextInputRootElement"] {
+  background: #FFFFFF !important; border: 1px solid var(--border) !important;
+  border-radius: 11px !important; min-height: 42px !important;
+  box-shadow: none !important; transition: border-color 0.15s, box-shadow 0.15s;
+}
+html:has(.ow-dash) .st-key-ow-topbar [data-testid="stTextInput"] div[data-testid="stTextInputRootElement"]:focus-within {
+  border-color: var(--blue) !important;
+  box-shadow: 0 0 0 3px rgba(61,90,254,0.12) !important;
+}
+html:has(.ow-dash) .st-key-ow-topbar [data-testid="stTextInput"] input {
+  background: transparent !important; color: var(--navy) !important;
+  font-size: 0.89rem !important; padding: 9px 12px !important;
+}
+html:has(.ow-dash) .st-key-ow-topbar [data-testid="stTextInput"] input::placeholder {
+  color: var(--meta) !important; opacity: 1 !important;
+}
+html:has(.ow-dash) .st-key-ow-topbar [data-testid="stTextInput"] [data-testid="stIconMaterial"] {
+  color: var(--meta) !important;
+}
+html:has(.ow-dash) .st-key-ow-bell button {
+  width: 42px !important; min-width: 42px !important; height: 42px !important;
+  min-height: 42px !important; padding: 0 !important; border-radius: 11px !important;
+  background: #FFFFFF !important; border: 1px solid var(--border) !important;
+  color: var(--navy) !important; box-shadow: none !important;
+}
+html:has(.ow-dash) .st-key-ow-bell button:hover { background: var(--soft-blue) !important; color: var(--blue) !important; }
+html:has(.ow-dash) .st-key-ow-bell button p { display: none !important; }
+html:has(.ow-dash) .st-key-ow-bell button [data-testid="stIconMaterial"] { font-size: 19px !important; }
+.ow-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--accent-bg); color: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.86rem; border: 1px solid #DCE6FF;
+  margin-left: auto; user-select: none;
+}
+.ow-page-title {
+  font-size: 1.45rem; font-weight: 800; color: var(--navy);
+  letter-spacing: -0.02em; line-height: 42px;
+}
+html:has(.ow-dash) .st-key-ow-topbar [data-testid="stColumn"] { align-self: center !important; }
+
+/* ── Daily briefing banner ────────────────────────────────────────────── */
+html:has(.ow-dash) .st-key-ow-briefing {
+  background: linear-gradient(135deg, #2F49E8 0%, #3D5AFE 58%, #5B74FF 100%) !important;
+  border-radius: 15px !important; padding: 18px 20px !important;
+  box-shadow: 0 8px 22px rgba(61,90,254,0.18) !important;
+  color: #FFFFFF !important; gap: 4px !important;
+}
+html:has(.ow-dash) .st-key-ow-briefing [data-testid="stHorizontalBlock"] {
+  align-items: center !important; gap: 14px !important;
+}
+.ow-briefing-left { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.ow-briefing-icon {
+  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+  background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+}
+.ow-briefing-kicker {
+  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(255,255,255,0.72); margin-bottom: 2px;
+}
+.ow-briefing-h { font-size: 1.08rem; font-weight: 700; color: #FFFFFF; margin: 0; line-height: 1.3; }
+.ow-briefing-sub { font-size: 0.8rem; color: rgba(255,255,255,0.82); margin-top: 3px; line-height: 1.4; }
+html:has(.ow-dash) .st-key-ow-open-briefing button {
+  width: 100% !important; min-height: 34px !important; height: 34px !important;
+  background: rgba(255,255,255,0.14) !important;
+  border: 1px solid rgba(255,255,255,0.34) !important;
+  border-radius: 9px !important; color: #FFFFFF !important;
+  font-size: 0.78rem !important; font-weight: 600 !important;
+  padding: 0 12px !important; white-space: nowrap !important;
+  box-shadow: none !important; backdrop-filter: blur(4px);
+}
+html:has(.ow-dash) .st-key-ow-open-briefing button:hover {
+  background: rgba(255,255,255,0.24) !important;
+  border-color: rgba(255,255,255,0.55) !important;
+}
+html:has(.ow-dash) .st-key-ow-open-briefing button p { color: #FFFFFF !important; font-size: 0.78rem !important; }
+
+/* ── Feed tabs (underline treatment) ──────────────────────────────────── */
+html:has(.ow-dash) .st-key-ow-feed-tabs [data-testid="stHorizontalBlock"] {
+  gap: 4px !important; border-bottom: 1px solid var(--border) !important;
+  margin-bottom: 2px; overflow-x: auto; scrollbar-width: none;
+}
+html:has(.ow-dash) .st-key-ow-feed-tabs [data-testid="stHorizontalBlock"]::-webkit-scrollbar { display: none; }
+html:has(.ow-dash) .st-key-ow-feed-tabs [data-testid="stColumn"] { min-width: 138px; }
+html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button {
+  width: 100% !important; min-height: 38px !important;
+  background: transparent !important; border: none !important;
+  border-bottom: 2px solid transparent !important; border-radius: 0 !important;
+  color: var(--muted) !important; font-size: 0.84rem !important;
+  font-weight: 600 !important; padding: 8px 6px 9px !important;
+  box-shadow: none !important; white-space: nowrap !important;
+}
+html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button p {
+  font-size: 0.84rem !important; font-weight: 600 !important; color: inherit !important;
+}
+html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button:hover {
+  color: var(--blue) !important; background: transparent !important;
+}
+html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button[kind="primary"] {
+  color: var(--blue) !important; border-bottom-color: var(--blue) !important;
+  background: transparent !important;
+}
+
+/* ── Article cards ────────────────────────────────────────────────────── */
+html:has(.ow-dash) [class*="st-key-art-"] {
+  background: #FFFFFF !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--card-radius) !important;
+  padding: 14px 16px 12px !important;
+  box-shadow: 0 1px 2px rgba(24,38,83,0.04) !important;
+  gap: 6px !important;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  margin-bottom: 0;
+}
+html:has(.ow-dash) [class*="st-key-art-"]:hover {
+  border-color: #C9D6EA !important;
+  box-shadow: 0 6px 18px rgba(24,38,83,0.06) !important;
+}
+html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.72; }
+.ow-card-read-flag { display: none; }
+.ow-card-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  font-size: 0.76rem; color: var(--meta); margin-bottom: 3px;
+}
+.ow-card-publisher { color: var(--muted); font-weight: 600; }
+.ow-card-date { color: var(--meta); }
+.ow-card-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  border-radius: 999px; padding: 1px 7px; font-size: 0.66rem;
+  font-weight: 600; line-height: 1.5; margin-left: 2px;
+}
+.ow-card-badge.high { background: var(--success-bg); color: var(--success); }
+.ow-card-badge.relevant { background: var(--warning-bg); color: var(--warning); }
+.ow-card-badge.read { background: var(--soft-blue); color: var(--muted); }
+.ow-card-title {
+  display: block; font-size: 1.06rem; font-weight: 650; color: var(--navy) !important;
+  line-height: 1.4; text-decoration: none !important; letter-spacing: -0.006em;
+  margin: 1px 0 4px;
+}
+.ow-card-title:hover { color: var(--blue) !important; }
+.ow-card-summary {
+  font-size: 0.855rem; color: var(--muted); line-height: 1.55;
+  margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+.ow-card-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 2px; }
+.ow-card-chip {
+  display: inline-flex; align-items: center;
+  background: var(--soft-blue); border: 1px solid #E3EBFA;
+  color: #4A5F8F; border-radius: 999px; padding: 2px 9px;
+  font-size: 0.68rem; font-weight: 600; line-height: 1.55;
+}
+/* Empty / failure states keep the same reading surface as a card */
+.ow-empty {
+  background: #FFFFFF; border: 1px dashed var(--border); border-radius: var(--card-radius);
+  text-align: center; padding: 34px 20px; color: var(--muted);
+}
+.ow-empty-h { font-weight: 700; color: var(--navy); margin: 8px 0 4px; font-size: 0.95rem; }
+/* Save sits at the card's upper right, not in the action row */
+html:has(.ow-dash) [class*="st-key-save-"] button {
+  width: 34px !important; min-width: 34px !important; height: 34px !important;
+  min-height: 34px !important; padding: 0 !important;
+  border-radius: 9px !important; background: #FFFFFF !important;
+  border: 1px solid var(--border) !important; color: var(--navy) !important;
+  box-shadow: none !important;
+}
+html:has(.ow-dash) [class*="st-key-save-"] button p { display: none !important; }
+html:has(.ow-dash) [class*="st-key-save-"] button [data-testid="stIconMaterial"] { font-size: 17px !important; }
+html:has(.ow-dash) [class*="st-key-save-"] button:hover {
+  background: var(--soft-blue) !important; color: var(--blue) !important;
+  border-color: #C7D4FF !important;
+}
+html:has(.ow-dash) [class*="st-key-save-"] button[kind="primary"] {
+  background: var(--accent-bg) !important; border-color: #DCE6FF !important;
+  color: var(--blue) !important;
+}
+
+/* Card header row: metadata/title on the left, bookmark pinned top-right */
+html:has(.ow-dash) [class*="st-key-art-"] [data-testid="stHorizontalBlock"]:has([class*="st-key-save-"]) {
+  align-items: flex-start !important; gap: 10px !important;
+}
+html:has(.ow-dash) [class*="st-key-art-"] [data-testid="stHorizontalBlock"]:has([class*="st-key-save-"]) > [data-testid="stColumn"]:last-child {
+  display: flex !important; justify-content: flex-end !important;
+}
+
+/* In-card action row: light bordered chips, not dark blocks */
+html:has(.ow-dash) [class*="st-key-ow-actions-"] {
+  gap: 6px !important; flex-wrap: wrap !important; margin-top: 2px;
+}
+html:has(.ow-dash) [class*="st-key-ow-actions-"] [data-testid="stElementContainer"] {
+  width: auto !important; flex: 0 0 auto !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button {
+  width: auto !important; min-height: 31px !important; height: 31px !important;
+  background: #FFFFFF !important; border: 1px solid var(--border) !important;
+  border-radius: 8px !important; color: var(--blue) !important;
+  font-size: 0.75rem !important; font-weight: 600 !important;
+  padding: 0 10px !important; box-shadow: none !important;
+  white-space: nowrap !important; gap: 5px !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button p {
+  font-size: 0.75rem !important; font-weight: 600 !important; color: inherit !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button [data-testid="stIconMaterial"] {
+  font-size: 15px !important; color: inherit !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button:hover {
+  background: var(--soft-blue) !important; border-color: #C7D4FF !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button[kind="primary"] {
+  background: var(--accent-bg) !important; border-color: #DCE6FF !important;
+  color: var(--blue) !important;
+}
+
+/* AI panels stay inside the card */
+html:has(.ow-dash) [data-testid="stExpander"] {
+  border: 1px solid var(--divider) !important; border-radius: 10px !important;
+  background: #FBFCFE !important; box-shadow: none !important;
+}
+html:has(.ow-dash) [data-testid="stExpander"] summary {
+  font-size: 0.8rem !important; font-weight: 600 !important; color: var(--navy) !important;
+  padding: 8px 12px !important;
+}
+html:has(.ow-dash) [data-testid="stExpander"] summary p { font-size: 0.8rem !important; }
+html:has(.ow-dash) [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 4px 12px 10px; }
+
+/* ── General dashboard controls (secondary-first hierarchy) ───────────── */
+html:has(.ow-dash) .stButton button {
+  border-radius: var(--control-radius) !important;
+  font-weight: 600 !important;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+html:has(.ow-dash) .stButton button[kind="secondary"] {
+  background: #FFFFFF !important; border: 1px solid var(--border) !important;
+  color: var(--navy) !important; box-shadow: none !important;
+}
+html:has(.ow-dash) .stButton button[kind="secondary"]:hover {
+  background: var(--soft-blue) !important; border-color: #C7D4FF !important;
+  color: var(--blue) !important;
+}
+html:has(.ow-dash) .stButton button[kind="primary"] {
+  background: var(--blue) !important; border: 1px solid var(--blue) !important;
+  color: #FFFFFF !important; box-shadow: 0 3px 10px rgba(61,90,254,0.18) !important;
+}
+html:has(.ow-dash) .stButton button[kind="primary"]:hover {
+  background: var(--hover-blue) !important; border-color: var(--hover-blue) !important;
+}
+html:has(.ow-dash) .stButton button[kind="tertiary"] {
+  background: transparent !important; border: none !important;
+  color: var(--blue) !important; box-shadow: none !important;
+}
+html:has(.ow-dash) .stButton button p { color: inherit !important; }
+html:has(.ow-dash) [data-testid="stTextInput"] div[data-testid="stTextInputRootElement"] {
+  background: #FFFFFF !important; border: 1px solid var(--border) !important;
+  border-radius: var(--control-radius) !important;
+}
+html:has(.ow-dash) [data-testid="stTextInput"] input {
+  background: transparent !important; color: var(--navy) !important;
+}
+html:has(.ow-dash) [data-testid="stSelectbox"] > div > div {
+  background: #FFFFFF !important; border-color: var(--border) !important;
+  border-radius: var(--control-radius) !important;
+}
+html:has(.ow-dash) a { color: var(--blue); }
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) {
+    flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important;
+    height: auto !important; position: static !important;
+    border-right: none !important; border-bottom: 1px solid var(--border) !important;
+    padding: 12px 12px 10px !important;
+  }
+  html:has(.ow-dash) .st-key-ow-nav {
+    display: grid !important; grid-template-columns: 1fr 1fr; gap: 3px !important;
+  }
+  html:has(.ow-dash) .st-key-ow-interests { max-height: 24vh; }
+  html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-main-marker) {
+    padding: 14px 14px 34px !important;
+  }
+  .ow-brand { padding-bottom: 10px; margin-bottom: 6px; }
+  .ow-brand-name { font-size: 1.15rem; }
+}
+@media (max-width: 700px) {
+  html:has(.ow-dash) .st-key-ow-briefing [data-testid="stColumn"] {
+    flex: 1 1 100% !important; width: 100% !important;
+  }
+  html:has(.ow-dash) .st-key-ow-briefing { padding: 14px !important; }
+  .ow-briefing-h { font-size: 1rem; }
+  .ow-card-title { font-size: 1rem; }
+  .ow-card-summary { font-size: 0.84rem; }
+  html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-main-marker) {
+    padding: 12px 12px 30px !important;
+  }
+}
+/* Final cascade overrides — keep these last so framework defaults and
+   generic button rules cannot win over the dashboard-specific styling. */
+html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button {
+  color: var(--blue) !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button p {
+  color: var(--blue) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1900,6 +2332,38 @@ def _rank_broaden(pool, topics, subtopics):
 def check_ai_available():
     try: OpenAI(api_key=OPENAI_KEY); return True, ""
     except: return False, "OpenAI key not configured"
+
+# ── Dashboard card helpers (Phase 1C) ─────────────────────────────────────
+def _clean_text(value, limit=None):
+    """Plain, display-safe text: no markup, entities or duplicated whitespace."""
+    text = _html.unescape(str(value or ""))
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if limit and len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0].rstrip(" ,.;:") + "…"
+    return text
+
+def _date_label(raw):
+    """Publisher date when known — never the retrieval date, never invented."""
+    text = _clean_text(raw)
+    return text if text else "Date unavailable"
+
+def _article_key(url):
+    """Stable per-article key so AI/save widget state survives reruns and reorders."""
+    return hashlib.sha1((url or "").encode("utf-8")).hexdigest()[:12]
+
+def _article_chips(art, subtopics_by_topic):
+    """Grounded labels only: the article's topic plus subtopics it actually mentions."""
+    hay = f"{art.get('title', '')} {art.get('summary', '')}".lower()
+    chips = []
+    topic = _clean_text(art.get("topic"))
+    if topic:
+        chips.append(topic)
+    for sub in (subtopics_by_topic or {}).get(art.get("topic"), []) or []:
+        label = _clean_text(sub)
+        if label and label.lower() in hay and all(label.lower() != c.lower() for c in chips):
+            chips.append(label)
+    return chips[:3]
 
 # ═══════════════════════════════════════════════════════════
 # STATIC PAGES (privacy / tos)
@@ -2673,58 +3137,80 @@ domain_articles = [a for a in feed_pool
 briefing = cq.briefing_articles(feed_pool)
 
 # ── 2-column layout: sidebar + main ──
-sidebar_col, main_col = st.columns([1.2, 4.5], gap="small")
+st.markdown('<div class="ow-dash"></div>', unsafe_allow_html=True)
+sidebar_col, main_col = st.columns([1, 5], gap="small")
+
+def _navigate(tab_id, strategy=None, topic=None):
+    """Single navigation entry point so tab + feed strategy never drift apart."""
+    st.session_state.main_tab = tab_id
+    if strategy:
+        st.session_state.feed_strategy = strategy
+    if topic is not None:
+        st.session_state.active_topic = topic
+    st.session_state.right_panel = "none"
+    st.session_state.selected_article = None
+    st.session_state.ai_result = None
 
 # ══════════════════════
 # LEFT SIDEBAR
 # ══════════════════════
 with sidebar_col:
+    st.markdown('<div class="ow-sidebar-marker"></div>', unsafe_allow_html=True)
+
     # Brand
     st.markdown(f'''
-    <div style="display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid #e8edf5;margin-bottom:8px">
-      <img src="data:image/png;base64,{LOGO_B64}" style="width:32px;height:32px;border-radius:8px">
-      <span style="font-size:1.05rem;font-weight:800;color:#1a1a6e">Owlume</span>
+    <div class="ow-brand">
+      <img src="data:image/png;base64,{LOGO_B64}" alt="Owlume logo">
+      <span class="ow-brand-name">Owlume</span>
     </div>''', unsafe_allow_html=True)
 
-    # Nav — drives main_tab
-    def _tab_btn(label, tab_id):
-        is_active = st.session_state.main_tab == tab_id
-        if st.button(label, key=f"nav_{tab_id}", use_container_width=True,
-                     type="primary" if is_active else "secondary"):
-            st.session_state.main_tab = tab_id
-            st.session_state.right_panel = "none"
+    # Primary navigation — only the current view gets the selected treatment.
+    _cur_tab = st.session_state.main_tab
+    _cur_strategy = st.session_state.feed_strategy
+
+    def _nav_btn(label, icon, tab_id, strategy=None, active=False):
+        if st.button(label, key=f"nav_{tab_id}_{strategy or 'main'}", icon=icon,
+                     use_container_width=True,
+                     type="primary" if active else "secondary"):
+            _navigate(tab_id, strategy)
             st.rerun()
 
-    _tab_btn("🏠  Feed", "feed")
-    _tab_btn("📊  Daily Briefing", "briefing")
-    _tab_btn("🔔  Alerts", "alerts")
-    _tab_btn("🔭  Discover Sources", "discover")
-    _tab_btn("🔖  Saved Library", "saved")
-    _tab_btn("🤖  Ask Owlume", "ask")
+    with st.container(key="ow-nav"):
+        _nav_btn("My Feed", ":material/space_dashboard:", "feed", "for_you",
+                 _cur_tab == "feed" and _cur_strategy == "for_you")
+        _nav_btn("Discover", ":material/travel_explore:", "discover", None,
+                 _cur_tab == "discover")
+        _nav_btn("Emerging Trends", ":material/trending_up:", "feed", "emerging",
+                 _cur_tab == "feed" and _cur_strategy == "emerging")
+        _nav_btn("Broaden My Knowledge", ":material/public:", "feed", "broaden",
+                 _cur_tab == "feed" and _cur_strategy == "broaden")
+        if "Local News & Community" in all_t:
+            _nav_btn("Local News", ":material/location_on:", "local_news", None,
+                     _cur_tab == "local_news")
+        _nav_btn("Saved Library", ":material/bookmark:", "saved", None,
+                 _cur_tab == "saved")
+        _nav_btn("Ask Owlume", ":material/forum:", "ask", None, _cur_tab == "ask")
 
-    # Local News — only show button if user selected it as a topic
-    if "Local News & Community" in all_topics_for_user():
-        city_label = st.session_state.local_city or "set location"
-        _tab_btn(f"📍  Local News", "local_news")
-        if not st.session_state.local_city:
-            st.caption("📍 Set your city to get local news")
+    # Your interests
+    st.markdown('<div class="ow-sb-label">Your Interests</div>', unsafe_allow_html=True)
+    _feed_interests = [t for t in all_t if t != "Local News & Community"]
+    with st.container(key="ow-interests"):
+        for _t in _feed_interests:
+            _is_active = (_t == active and _cur_tab == "feed"
+                          and _cur_strategy == "my_fields")
+            if st.button(_t[:26], key=f"topic_{_t}", icon=":material/circle:",
+                         use_container_width=True,
+                         type="primary" if _is_active else "secondary",
+                         help=f"Filter your feed to {_t}"):
+                _navigate("feed", "my_fields", topic=_t)
+                st.session_state.myfields_filter = _t
+                st.rerun()
+    if st.button("Manage interests", key="manage_interests", icon=":material/tune:",
+                 use_container_width=True):
+        st.session_state.screen = "interests"; st.rerun()
 
-    st.markdown('<div style="font-size:0.72rem;font-weight:600;color:#64748b;padding:12px 0 4px;text-transform:uppercase;letter-spacing:0.05em">My Topics</div>', unsafe_allow_html=True)
-
-    # Topic navigation
-    for t in all_t:
-        col = topic_color(t); ico = topic_icon(t)
-        is_active = t == active
-        lbl = f"{'▶ ' if is_active else ''}{ico} {t[:20]}"
-        if st.button(lbl, key=f"topic_{t}", use_container_width=True,
-                     type="primary" if is_active else "secondary"):
-            st.session_state.active_topic = t
-            st.session_state.right_panel = "none"
-            st.session_state.selected_article = None
-            st.session_state.ai_result = None; st.rerun()
-
-    # Subtopics for active topic
-    with st.expander("🔎 Subtopics", expanded=bool(subtopics_for_active)):
+    # Subtopics for the active interest
+    with st.expander("Refine subtopics", expanded=bool(subtopics_for_active)):
         cur_subs = st.session_state.subtopics.get(active, [])
         s1, s2 = st.columns([4,1])
         new_s = s1.text_input("Add subtopic", key=f"sb_{active}", placeholder="narrow search…",
@@ -2734,14 +3220,14 @@ with sidebar_col:
             st.session_state.subtopics[active] = cur_subs; st.rerun()
         for s in cur_subs:
             sc1, sc2 = st.columns([3,1])
-            sc1.markdown(f"<small>`{s[:16]}`</small>", unsafe_allow_html=True)
+            sc1.markdown(f"<span style='font-size:0.79rem;color:#64748B'>{_html.escape(s[:18])}</span>",
+                         unsafe_allow_html=True)
             if sc2.button("✕", key=f"sb_rm_{active}_{s[:12]}"):
                 cur_subs.remove(s); st.session_state.subtopics[active] = cur_subs; st.rerun()
 
-    st.markdown("---")
-    if st.button("➕ Add topic", key="add_topic_btn", use_container_width=True):
-        st.session_state.screen = "interests"; st.rerun()
-    if st.button("⚙ Settings", key="settings_btn", use_container_width=True):
+    st.markdown('<div class="ow-sb-divider"></div>', unsafe_allow_html=True)
+    if st.button("Settings", key="settings_btn", icon=":material/settings:",
+                 use_container_width=True):
         st.session_state.right_panel = "settings"; st.rerun()
 
 # ══════════════════════
@@ -2749,10 +3235,39 @@ with sidebar_col:
 # ══════════════════════
 with main_col:
   cur_tab = st.session_state.main_tab
+  st.markdown('<div class="ow-main-marker"></div>', unsafe_allow_html=True)
+
+  # ── Top toolbar: real search on the feed, current view title elsewhere ──
+  _page_titles = {
+      "discover": "Discover Sources", "saved": "Saved Library",
+      "ask": "Ask Owlume", "briefing": "Daily Briefing",
+      "alerts": "Alerts", "local_news": "Local News & Community",
+  }
+  _avatar_initial = (st.session_state.get("user_role") or "O")[:1].upper()
+  search = ""
+  with st.container(key="ow-topbar"):
+      _tb_search, _tb_bell, _tb_user = st.columns([6.6, 0.6, 0.6], gap="small")
+      with _tb_search:
+          if cur_tab == "feed":
+              search = st.text_input(
+                  "Search your feed", key="feed_search",
+                  placeholder="Search your feed, topics or ask a question…",
+                  label_visibility="collapsed", icon=":material/search:",
+                  type="search")
+          else:
+              st.markdown(
+                  f'<div class="ow-page-title">{_page_titles.get(cur_tab, "Owlume")}</div>',
+                  unsafe_allow_html=True)
+      with _tb_bell:
+          if st.button("Alerts", key="ow_bell", icon=":material/notifications:",
+                       help="View alerts"):
+              _navigate("alerts"); st.rerun()
+      with _tb_user:
+          st.markdown(f'<div class="ow-avatar" title="Your profile">{_avatar_initial}</div>',
+                      unsafe_allow_html=True)
 
   # ── DISCOVER SOURCES tab ──
   if cur_tab == "discover":
-    st.markdown(f'<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">🔭 Discover Sources</div>', unsafe_allow_html=True)
     st.markdown('<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">Find journals, publications and research repositories relevant to your topics.</div>', unsafe_allow_html=True)
 
     disc_domain = st.text_input("Search for a domain or topic", value=active,
@@ -2830,7 +3345,6 @@ with main_col:
 
   # ── SAVED LIBRARY tab ──
   elif cur_tab == "saved":
-    st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">🔖 Saved Library</div>', unsafe_allow_html=True)
     bms = st.session_state.bookmarks
     if not bms:
         st.markdown('<div style="color:#64748b;padding:2rem 0">No saved articles yet — click 🔖 on any article in your feed.</div>', unsafe_allow_html=True)
@@ -2854,7 +3368,6 @@ with main_col:
 
   # ── ASK OWLUME tab ──
   elif cur_tab == "ask":
-    st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">🦉 Ask Owlume</div>', unsafe_allow_html=True)
     st.markdown(f'<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">Ask questions about your {active} feed or any research topic.</div>', unsafe_allow_html=True)
 
     for msg in st.session_state.chat_history[-10:]:
@@ -2899,7 +3412,6 @@ with main_col:
   # ── DAILY BRIEFING tab ──
   elif cur_tab == "briefing":
     today_long = datetime.now().strftime("%A, %d %B %Y")
-    st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">📊 Daily Briefing</div>', unsafe_allow_html=True)
     st.markdown(f'<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">{today_long} · Personalised for your topics</div>', unsafe_allow_html=True)
 
     briefing_tab = cq.briefing_articles(feed_pool, limit=12)
@@ -2946,7 +3458,6 @@ with main_col:
 
   # ── ALERTS tab ──
   elif cur_tab == "alerts":
-    st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">🔔 Alerts</div>', unsafe_allow_html=True)
     st.markdown('<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">Track keywords — see matching articles from your current feed.</div>', unsafe_allow_html=True)
 
     al1, al2 = st.columns([5, 1])
@@ -2987,7 +3498,6 @@ with main_col:
     city = st.session_state.local_city.strip()
     region = st.session_state.local_region.strip()
 
-    st.markdown('<div class="ow-panel-h" style="font-size:1.2rem;margin-bottom:4px">📍 Local News & Community</div>', unsafe_allow_html=True)
 
     # ── Location setup / edit ──
     if not city:
@@ -3176,28 +3686,27 @@ with main_col:
 
   # ── FEED tab (default) ──
   else:
-    # Search bar
-    search = st.text_input("Search your feed…", key="feed_search",
-                           placeholder="Search articles, topics or ask a question…",
-                           label_visibility="collapsed")
-
-    # Search is applied per tab (see below) so it never rewrites a feed's
-    # candidate selection — it only filters the list that tab ranks.
-
-    # Daily briefing card — top stories from the eligible, dated set only.
-    today = datetime.now().strftime("%a, %d %b %Y")
-    top3 = briefing["items"]
-    briefing_items_html = "".join([
-        f'<div class="ow-briefing-item">→ <a href="{a["url"]}" target="_blank" style="color:rgba(255,255,255,0.9) !important;text-decoration:underline">{a["title"][:85]}</a></div>'
-        for a in top3
-    ]) if top3 else '<div class="ow-briefing-item" style="opacity:0.7">No eligible stories in the last 7 days yet.</div>'
-    st.markdown(f'''
-    <div class="ow-briefing">
-      <div class="ow-briefing-date">{today}</div>
-      <div class="ow-briefing-h">Your daily briefing</div>
-      <div class="ow-briefing-sub" style="margin-bottom:8px">{briefing["total"]} eligible articles from {briefing["publishers"]} publishers in the last {briefing["window_days"]} days</div>
-      {briefing_items_html}
-    </div>''', unsafe_allow_html=True)
+    # Daily briefing banner — date and counts come from the real briefing data.
+    today = datetime.now().strftime("%d %b %Y")
+    with st.container(key="ow-briefing"):
+        _b_left, _b_action = st.columns([6.4, 1.35], gap="small")
+        with _b_left:
+            st.markdown(f'''
+            <div class="ow-briefing-left">
+              <div class="ow-briefing-icon">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true">
+                  <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/>
+                </svg>
+              </div>
+              <div>
+                <div class="ow-briefing-kicker">Daily briefing · {today}</div>
+                <div class="ow-briefing-h">Your daily briefing</div>
+                <div class="ow-briefing-sub">{briefing["total"]} eligible articles from {briefing["publishers"]} publishers in the last {briefing["window_days"]} days</div>
+              </div>
+            </div>''', unsafe_allow_html=True)
+        with _b_action:
+            if st.button("View full briefing →", key="ow_open_briefing"):
+                _navigate("briefing"); st.rerun()
 
     # ── Retrieval health: honest partial / total failure states ──
     _topic_attempts = len(_pool_topics) + len(feed_discovery_topics)
@@ -3215,168 +3724,192 @@ with main_col:
         with st.expander("Retrieval details", expanded=False):
             for _err in feed_pool_errors:
                 st.caption(f"• {_err.get('topic')}: {_err.get('error')}")
-        if st.button("🔄 Retry sources", key="retry_feed_sources"):
+        if st.button("Retry sources", key="retry_feed_sources", icon=":material/refresh:"):
             st.session_state.feed_pool = None
             st.session_state.feed_pool_key = None
             st.session_state.feed_pool_errors = []
             st.rerun()
 
-    # Feed strategy tabs — each has its own candidate selection and ranking.
-    _strategy_labels = ["✨ For You", "🎯 My Fields", "📈 Emerging", "🌍 Broaden"]
-    _strategy_keys = ["for_you", "my_fields", "emerging", "broaden"]
-    _strategy_objs = st.tabs(_strategy_labels)
-    for ti, tab in enumerate(_strategy_objs):
-      with tab:
-        _strat = _strategy_keys[ti]
-
-        # Every tab derives its own list from the same bounded candidate pool.
-        if _strat == "for_you":
-            tab_arts = _rank_for_you(feed_pool, all_t, st.session_state.subtopics)
-            st.caption("Balanced mix of your strongest interests, your information "
-                       "preferences, recent developments, and a little discovery.")
-        elif _strat == "my_fields":
-            _filter_opts = ["All"] + [t for t in all_t if t != "Local News & Community"]
-            _sel_filter = st.selectbox("Filter by interest", _filter_opts,
-                                      key="myfields_filter", label_visibility="collapsed")
-            tab_arts = _rank_my_fields(feed_pool, all_t, st.session_state.subtopics,
-                                      filter_topic=_sel_filter if _sel_filter != "All" else None)
-            st.caption("Focused on your saved interests and subtopics; information "
-                       "preferences nudge which kinds of content rise to the top.")
-        elif _strat == "emerging":
-            tab_arts = _rank_emerging(feed_pool, all_t, st.session_state.subtopics)
-            st.caption("Recent, independently reported developments. These are emerging "
-                       "signals — not confirmed trends or popularity scores.")
-        else:
-            tab_arts = _rank_broaden(feed_pool, all_t, st.session_state.subtopics)
-            _disc_preview = ", ".join(feed_discovery_topics[:2])
-            st.caption("Quality material from fields beyond your saved interests"
-                       + (f" (this refresh: {_disc_preview})" if _disc_preview else "")
-                       + ". Discovery comes from the topic catalogue, not a fixed list.")
-
-        # Search filters this tab's ranked list without changing its strategy.
-        tab_arts = fs.search_articles(tab_arts, search)
-
-        if not tab_arts:
-            _empty_reason = (
-                "No suitable content was returned by the available sources for this view."
-                if not feed_pool else
-                "Nothing in the current candidate pool matches this view or your search."
-            )
-            _empty_hint = {
-                "for_you": "Try adding another interest or subtopic, or retry the sources.",
-                "my_fields": "Try the All filter, add a subtopic, or retry the sources.",
-                "emerging": "Recent items may be thin right now — try another feed or retry.",
-                "broaden": "Discovery content may be sparse right now — try another feed or retry.",
-            }[_strat]
-            st.markdown(f"""
-            <div style="text-align:center;padding:2rem;color:#666;">
-              <div style="font-size:2.5rem">🔭</div>
-              <div style="font-weight:600;margin:0.5rem 0">Nothing here yet</div>
-              <div style="font-size:0.85rem">{_empty_reason}<br>{_empty_hint}</div>
-            </div>""", unsafe_allow_html=True)
-            if not feed_pool and not feed_pool_errors:
-                if st.button("🔄 Retry sources", key=f"retry_empty_{ti}"):
-                    st.session_state.feed_pool = None
-                    st.session_state.feed_pool_key = None
+    # ── Feed tabs: underline treatment, each re-ranks the same pool ──
+    _strategy_labels = [
+        ("for_you", "For You"),
+        ("my_fields", "My Fields"),
+        ("emerging", "Emerging Trends"),
+        ("broaden", "Broaden My Knowledge"),
+    ]
+    if st.session_state.feed_strategy not in [k for k, _ in _strategy_labels]:
+        st.session_state.feed_strategy = "for_you"
+    with st.container(key="ow-feed-tabs"):
+        _tab_cols = st.columns(len(_strategy_labels), gap="small")
+        for _tc, (_skey, _slabel) in zip(_tab_cols, _strategy_labels):
+            with _tc:
+                if st.button(_slabel, key=f"ftab_{_skey}", use_container_width=True,
+                             type="primary" if st.session_state.feed_strategy == _skey else "secondary"):
+                    st.session_state.feed_strategy = _skey
                     st.rerun()
-            continue
 
+    _strat = st.session_state.feed_strategy
+    tab_arts = []
+
+    # Every tab derives its own list from the same bounded candidate pool.
+    if _strat == "for_you":
+        tab_arts = _rank_for_you(feed_pool, all_t, st.session_state.subtopics)
+        st.caption("A balanced mix of your strongest interests, your information "
+                   "preferences, recent developments and a little discovery.")
+    elif _strat == "my_fields":
+        _filter_opts = ["All"] + [t for t in all_t if t != "Local News & Community"]
+        if st.session_state.get("myfields_filter") not in _filter_opts:
+            st.session_state.myfields_filter = "All"
+        _sel_filter = st.selectbox("Filter by interest", _filter_opts,
+                                  key="myfields_filter", label_visibility="collapsed")
+        tab_arts = _rank_my_fields(feed_pool, all_t, st.session_state.subtopics,
+                                  filter_topic=_sel_filter if _sel_filter != "All" else None)
+        st.caption("Focused on your saved interests and subtopics; information "
+                   "preferences nudge which kinds of content rise to the top.")
+    elif _strat == "emerging":
+        tab_arts = _rank_emerging(feed_pool, all_t, st.session_state.subtopics)
+        st.caption("Recent, independently reported developments. These are emerging "
+                   "signals — not confirmed trends or popularity scores.")
+    else:
+        tab_arts = _rank_broaden(feed_pool, all_t, st.session_state.subtopics)
+        _disc_preview = ", ".join(feed_discovery_topics[:2])
+        st.caption("Quality material from fields beyond your saved interests"
+                   + (f" (this refresh: {_disc_preview})" if _disc_preview else "")
+                   + ". Discovery comes from the topic catalogue, not a fixed list.")
+
+    # Search filters this tab's ranked list without changing its strategy.
+    tab_arts = fs.search_articles(tab_arts, search)
+
+    if not tab_arts:
+        _empty_reason = (
+            "No suitable content was returned by the available sources for this view."
+            if not feed_pool else
+            "Nothing in the current candidate pool matches this view or your search."
+        )
+        _empty_hint = {
+            "for_you": "Try adding another interest or subtopic, or retry the sources.",
+            "my_fields": "Try the All filter, add a subtopic, or retry the sources.",
+            "emerging": "Recent items may be thin right now — try another feed or retry.",
+            "broaden": "Discovery content may be sparse right now — try another feed or retry.",
+        }[_strat]
+        st.markdown(f"""
+        <div class="ow-empty">
+          <div style="font-size:2rem">🔭</div>
+          <div class="ow-empty-h">Nothing here yet</div>
+          <div style="font-size:0.85rem">{_empty_reason}<br>{_empty_hint}</div>
+        </div>""", unsafe_allow_html=True)
+        if not feed_pool and not feed_pool_errors:
+            if st.button("Retry sources", key="retry_empty_feed", icon=":material/refresh:"):
+                st.session_state.feed_pool = None
+                st.session_state.feed_pool_key = None
+                st.rerun()
+
+    if tab_arts:
         high_rel = [a for a in tab_arts
                     if cq.relevance_label(a.get("relevance", 0)) == "high"]
         if high_rel:
             st.caption(f"📌 {len(high_rel)} high-match · {len(tab_arts)} articles in this feed")
         else:
-            st.caption(f"🔍 {len(tab_arts)} articles in this feed")
+            st.caption(f"{len(tab_arts)} articles in this feed")
 
         for art_i, art in enumerate(tab_arts[:20]):
-            rel = art.get("relevance", 0)
-            url = art["url"]
+            url = art.get("url", "")
+            ak = f"{_strat}-{_article_key(url)}"
             is_read = url in st.session_state.read_articles
             is_bm = is_bookmarked(url)
 
-            read_style = "opacity:0.55;" if is_read else ""
+            title = _clean_text(art.get("title"), 180)
+            source = _clean_text(art.get("source")) or "Unknown source"
+            date_lbl = _date_label(art.get("date"))
+            summary = _clean_text(art.get("summary"), 300)
+            chips = _article_chips(art, st.session_state.subtopics)
+
+            label = cq.relevance_label(art.get("relevance", 0))
             rel_badge = ""
-            label = cq.relevance_label(rel)
             if label == "high":
-                rel_badge = '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">●● High match</span>'
+                rel_badge = '<span class="ow-card-badge high">● High match</span>'
             elif label == "relevant":
-                rel_badge = '<span style="background:#fff8e1;color:#e65100;padding:1px 6px;border-radius:8px;font-size:0.72rem;margin-left:6px">● Relevant</span>'
+                rel_badge = '<span class="ow-card-badge relevant">● Relevant</span>'
+            read_badge = '<span class="ow-card-badge read">✓ Read</span>' if is_read else ""
+            chips_html = "".join(
+                f'<span class="ow-card-chip">{_html.escape(c)}</span>' for c in chips)
+            read_flag = '<span class="ow-card-read-flag"></span>' if is_read else ""
+            summary_html = f'<div class="ow-card-summary">{_html.escape(summary)}</div>' if summary else ""
+            chips_block = f'<div class="ow-card-chips">{chips_html}</div>' if chips_html else ""
 
-            st.markdown(f'''
-            <div class="ow-art-card" style="{read_style}">
-              <div class="ow-art-source">{art["source"]} · {art.get("date","")}{" · ✓ Read" if is_read else ""}{rel_badge}</div>
-              <a class="ow-art-title" href="{url}" target="_blank">{art["title"][:120]}</a>
-              <div class="ow-art-summary">{art.get("summary","")[:220]}</div>
-            </div>''', unsafe_allow_html=True)
-
-            # Compact 6-action toolbar: Summary | Takeaways | Why It Matters | Save | Read | Ask
-            act1, act2, act3, act4, act5, act6 = st.columns([1.4, 1.4, 1.7, 1.2, 0.8, 0.8])
-
-            with act1:
-                if st.button("📝 Summary", key=f"sum_{ti}_{art_i}", use_container_width=True,
-                             help="3-sentence AI summary"):
-                    with st.spinner("Summarising…"):
-                        result = _openai_call(build_summary_prompt(art["title"], art.get("summary","")), mode="Digest")
-                    st.session_state[f"inline_result_{ti}_{art_i}"] = _ai_display(result)
-                    st.session_state[f"inline_type_{ti}_{art_i}"] = "summary"
-                    st.rerun()
-
-            with act2:
-                if st.button("🔑 Takeaways", key=f"tkw_{ti}_{art_i}", use_container_width=True,
-                             help="Key takeaways as bullet points"):
-                    with st.spinner("Extracting takeaways…"):
-                        result = _openai_call(build_takeaways_prompt(art["title"], art.get("summary","")), mode="Digest")
-                    st.session_state[f"inline_result_{ti}_{art_i}"] = _ai_display(result)
-                    st.session_state[f"inline_type_{ti}_{art_i}"] = "takeaways"
-                    st.rerun()
-
-            with act3:
-                if st.button("💡 Why It Matters", key=f"wim_{ti}_{art_i}", use_container_width=True,
-                             help="Broader significance & implications"):
-                    with st.spinner("Analysing significance…"):
-                        result = _openai_call(build_why_matters_prompt(art["title"], art.get("summary","")), mode="Digest")
-                    st.session_state[f"inline_result_{ti}_{art_i}"] = _ai_display(result)
-                    st.session_state[f"inline_type_{ti}_{art_i}"] = "why_matters"
-                    st.rerun()
-
-            with act4:
-                bm_lbl = "★ Saved" if is_bm else "🔖 Save"
-                if st.button(bm_lbl, key=f"bm_{ti}_{art_i}", use_container_width=True):
-                    if is_bm:
-                        remove_bookmark(url)
-                    else:
-                        add_bookmark(art)
-                        add_to_library(art)
-                    st.rerun()
-
-            with act5:
-                rd_lbl = "✓" if is_read else "👁"
-                if st.button(rd_lbl, key=f"rd_{ti}_{art_i}", use_container_width=True,
-                             help="Mark as read"):
-                    if is_read:
-                        st.session_state.read_articles.discard(url)
-                    else:
-                        st.session_state.read_articles.add(url)
-                        add_to_library(art)
-                    st.rerun()
-
-            with act6:
-                if st.button("Ask", key=f"ask_art_{ti}_{art_i}", use_container_width=True,
-                             help="Ask Owlume about this article"):
-                    st.session_state.chat_history = [
-                        {"role": "user", "content": f"Tell me more about: {art['title']}"}
-                    ]
-                    st.session_state.main_tab = "ask"
-                    st.rerun()
-
-            # Inline AI result — labelled by type
-            ir_key = f"inline_result_{ti}_{art_i}"
-            if ir_key in st.session_state and st.session_state[ir_key]:
-                ir_type = st.session_state.get(f"inline_type_{ti}_{art_i}", "summary")
-                ir_labels = {"summary": "📝 AI Summary", "takeaways": "🔑 Key Takeaways", "why_matters": "💡 Why It Matters"}
-                ir_label = ir_labels.get(ir_type, "🤖 AI Result")
-                with st.expander(ir_label, expanded=True):
-                    st.markdown(st.session_state[ir_key])
-                    if st.button("Close", key=f"close_ir_{ti}_{art_i}"):
-                        del st.session_state[ir_key]
+            with st.container(key=f"art-{ak}"):
+                _c_head, _c_save = st.columns([9, 1], gap="small")
+                with _c_head:
+                    st.markdown(f'''
+                    {read_flag}
+                    <div class="ow-card-meta">
+                      <span class="ow-card-publisher">{_html.escape(source)}</span>
+                      <span class="ow-card-date">· {_html.escape(date_lbl)}</span>
+                      {rel_badge}{read_badge}
+                    </div>
+                    <a class="ow-card-title" href="{_html.escape(url, quote=True)}"
+                       target="_blank" rel="noopener noreferrer">{_html.escape(title)}</a>
+                    {summary_html}
+                    {chips_block}''', unsafe_allow_html=True)
+                with _c_save:
+                    if st.button("Saved" if is_bm else "Save", key=f"save-{ak}",
+                                 icon=":material/bookmark:" if is_bm else ":material/bookmark_border:",
+                                 help="Remove from saved library" if is_bm else "Save to your library",
+                                 type="primary" if is_bm else "secondary"):
+                        if is_bm:
+                            remove_bookmark(url)
+                        else:
+                            add_bookmark(art)
+                            add_to_library(art)
                         st.rerun()
+
+                with st.container(key=f"ow-actions-{ak}", horizontal=True, gap="small"):
+                    if st.button("AI summary", key=f"sum-{ak}", icon=":material/summarize:",
+                                 help="3-sentence AI summary"):
+                        with st.spinner("Summarising…"):
+                            result = _openai_call(build_summary_prompt(title, summary), mode="Digest")
+                        st.session_state[f"inline_result_{ak}"] = _ai_display(result)
+                        st.session_state[f"inline_type_{ak}"] = "summary"
+                        st.rerun()
+                    if st.button("Key takeaways", key=f"tkw-{ak}", icon=":material/key:",
+                                 help="Key takeaways as bullet points"):
+                        with st.spinner("Extracting takeaways…"):
+                            result = _openai_call(build_takeaways_prompt(title, summary), mode="Digest")
+                        st.session_state[f"inline_result_{ak}"] = _ai_display(result)
+                        st.session_state[f"inline_type_{ak}"] = "takeaways"
+                        st.rerun()
+                    if st.button("Why it matters", key=f"wim-{ak}", icon=":material/lightbulb:",
+                                 help="Broader significance and implications"):
+                        with st.spinner("Analysing significance…"):
+                            result = _openai_call(build_why_matters_prompt(title, summary), mode="Digest")
+                        st.session_state[f"inline_result_{ak}"] = _ai_display(result)
+                        st.session_state[f"inline_type_{ak}"] = "why_matters"
+                        st.rerun()
+                    if st.button("Read" if is_read else "Mark read", key=f"rd-{ak}",
+                                 icon=":material/check_circle:" if is_read else ":material/visibility:",
+                                 help="Mark as unread" if is_read else "Mark as read"):
+                        if is_read:
+                            st.session_state.read_articles.discard(url)
+                        else:
+                            st.session_state.read_articles.add(url)
+                            add_to_library(art)
+                        st.rerun()
+                    if st.button("Ask Owlume", key=f"ask_art-{ak}", icon=":material/forum:",
+                                 help="Ask Owlume about this article"):
+                        st.session_state.chat_history = [
+                            {"role": "user", "content": f"Tell me more about: {title}"}
+                        ]
+                        _navigate("ask")
+                        st.rerun()
+
+                # Inline AI result — revealed on demand, cached in session state.
+                ir_key = f"inline_result_{ak}"
+                if st.session_state.get(ir_key):
+                    ir_type = st.session_state.get(f"inline_type_{ak}", "summary")
+                    ir_labels = {"summary": "AI summary", "takeaways": "Key takeaways",
+                                 "why_matters": "Why it matters"}
+                    with st.expander(ir_labels.get(ir_type, "AI result"), expanded=True):
+                        st.markdown(st.session_state[ir_key])
+                        if st.button("Close", key=f"close_ir-{ak}"):
+                            st.session_state[ir_key] = None
+                            st.rerun()
