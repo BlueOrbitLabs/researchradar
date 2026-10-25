@@ -2344,9 +2344,9 @@ html:has(.ow-dash) [class*="st-key-art-"] {
   background: #FFFFFF !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--card-radius) !important;
-  padding: 12px 14px 10px !important;
+  padding: 10px 12px 8px !important;
   box-shadow: 0 1px 2px rgba(24,38,83,0.04) !important;
-  gap: 6px !important;
+  gap: 4px !important;
   transition: border-color 0.15s, box-shadow 0.15s;
   margin-bottom: 0;
 }
@@ -2371,14 +2371,16 @@ html:has(.ow-dash) [class*="st-key-art-"]:has(.ow-card-read-flag) { opacity: 0.7
 .ow-card-badge.relevant { background: var(--warning-bg); color: var(--warning); }
 .ow-card-badge.read { background: var(--soft-blue); color: var(--muted); }
 .ow-card-title {
-  display: block; font-size: 0.75rem; font-weight: 650; color: var(--navy) !important;
+  display: block; font-size: 0.8rem; font-weight: 650; color: var(--navy) !important;
+  max-width: 100%;
   line-height: 1.4; text-decoration: none !important; letter-spacing: -0.006em;
   margin: 1px 0 4px;
 }
 .ow-card-title:hover { color: var(--blue) !important; }
 .ow-card-summary {
   font-size: 0.68rem; color: var(--muted); line-height: 1.4;
-  margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 3;
+  margin: 0 0 6px; display: -webkit-box; -webkit-line-clamp: 2;
+  max-width: 100%;
   -webkit-box-orient: vertical; overflow: hidden;
 }
 .ow-card-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 2px; }
@@ -2423,13 +2425,13 @@ html:has(.ow-dash) [class*="st-key-art-"] [data-testid="stHorizontalBlock"]:has(
 
 /* In-card action row: light bordered chips, not dark blocks */
 html:has(.ow-dash) [class*="st-key-ow-actions-"] {
-  gap: 6px !important; flex-wrap: wrap !important; margin-top: 2px;
+  gap: 4px !important; flex-wrap: wrap !important; margin-top: 4px;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] [data-testid="stElementContainer"] {
   width: auto !important; flex: 0 0 auto !important;
 }
 html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button {
-  width: auto !important; min-height: 24px !important; height: 24px !important;
+  width: auto !important; min-height: 22px !important; height: 22px !important;
   background: #FFFFFF !important; border: 1px solid var(--border) !important;
   border-radius: 7px !important; color: var(--blue) !important;
   font-size: 0.62rem !important; font-weight: 600 !important;
