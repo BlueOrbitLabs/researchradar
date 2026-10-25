@@ -2187,13 +2187,15 @@ html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) [data-testid
   color: inherit !important; font-size: 18px !important;
 }
 html:has(.ow-dash) .st-key-ow-interests [data-testid="stIconMaterial"] {
-  color: var(--meta) !important; font-size: 9px !important;
+  color: var(--meta) !important; font-size: 14px !important;
+  width: 16px !important; min-width: 16px !important;
+  text-align: center !important;
 }
 html:has(.ow-dash) .st-key-ow-interests button[kind="primary"] [data-testid="stIconMaterial"] {
   color: var(--blue) !important;
 }
 html:has(.ow-dash) .st-key-ow-interests { max-height: 28vh; overflow-y: auto; gap: 0 !important; padding: 0 !important; }
-html:has(.ow-dash) .st-key-ow-interests .stButton button { min-height: 26px !important; padding: 3px 9px !important; font-size: 0.68rem !important; gap: 6px !important; }
+html:has(.ow-dash) .st-key-ow-interests .stButton button { min-height: 26px !important; padding: 3px 9px !important; font-size: 0.68rem !important; gap: 8px !important; }
 html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar { width: 5px; }
 html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
