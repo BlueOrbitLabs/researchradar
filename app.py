@@ -1235,35 +1235,153 @@ def validate_rss_feed(url: str) -> str:
     except Exception:
         return "error"
 
+def _normalize_source_name(name: str) -> str:
+    """Normalize a source name for deduplication: lowercase, strip punctuation,
+    drop leading articles and generic words."""
+    import re as _re
+    text = (name or "").lower().strip()
+    text = _re.sub(r"[^a-z0-9\s]", " ", text)
+    text = _re.sub(r"\s+", " ", text).strip()
+    # Drop leading articles
+    for art in ("the ", "a ", "an "):
+        if text.startswith(art):
+            text = text[len(art):]
+    # Drop very generic trailing words that cause false merges only when
+    # the rest of the name is identical.
+    return text
+
+
+def _source_dedupe_key(src: dict) -> str:
+    """Dedupe key combining normalized name + homepage domain."""
+    name_key = _normalize_source_name(src.get("name", ""))
+    homepage = (src.get("homepage_url") or "").lower()
+    # Extract domain from homepage
+    domain = ""
+    if homepage:
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(homepage).netloc.lower().replace("www.", "")
+        except Exception:
+            domain = ""
+    if domain:
+        return f"{name_key}|{domain}"
+    return name_key
+
+
 def discover_sources_for_domain(domain: str) -> list:
-    """Run all discovery providers for a domain and merge results.
-    Returns a list of source dicts; never invents sources."""
+    """Run all discovery providers for a domain (and its topic variants) and
+    merge results. Returns a list of source dicts; never invents sources.
+
+    Multi-query expansion: the domain string alone misses most sources. We
+    also query with the topic's catalogue keywords and subtopics, then
+    deduplicate by normalized name + homepage domain.
+    """
+    # Build query variants from the topic catalogue + subtopics.
+    queries = [domain]
+    cat = TOPIC_CATALOGUE.get(domain, {})
+    for kw in (cat.get("keywords") or [])[:3]:
+        if kw and kw.lower() != domain.lower():
+            queries.append(kw)
+    for sub in (cat.get("subtopics") or [])[:4]:
+        if sub and sub.lower() != domain.lower():
+            queries.append(sub)
+    # Dedupe query list while preserving order.
+    seen_q = set()
+    unique_queries = []
+    for q in queries:
+        if q.lower() not in seen_q:
+            seen_q.add(q.lower())
+            unique_queries.append(q)
+
     results = []
-    seen_names = set()
+    seen_keys = set()
 
-    # Always: Google News RSS (universal)
-    results += discover_sources_gnews_rss(domain)
+    def _add(src):
+        key = _source_dedupe_key(src)
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        results.append(src)
 
-    # Academic/scholarly: DOAJ journals
-    doaj = discover_sources_doaj(domain, max_results=15)
-    results += doaj
+    for q in unique_queries:
+        # Always: Google News RSS (universal)
+        for src in discover_sources_gnews_rss(q):
+            _add(src)
+        # Academic/scholarly: DOAJ journals
+        for src in discover_sources_doaj(q, max_results=8):
+            _add(src)
+        # Academic/scholarly: OpenAlex sources
+        for src in discover_sources_openalex(q, max_results=6):
+            _add(src)
+        # Health domains: PubMed
+        for src in discover_sources_pubmed(q):
+            _add(src)
 
-    # Academic/scholarly: OpenAlex sources
-    oa = discover_sources_openalex(domain, max_results=10)
-    results += oa
-
-    # Health domains: PubMed
-    results += discover_sources_pubmed(domain)
-
-    # Deduplicate by name (case-insensitive)
-    deduped = []
+    # Tag each source with the original domain for display consistency.
     for src in results:
-        key = src["name"].lower().strip()
-        if key not in seen_names:
-            seen_names.add(key)
-            deduped.append(src)
+        if not src.get("domain"):
+            src["domain"] = domain
+        # Merge topics: ensure the original domain is in topics.
+        topics = src.get("topics") or []
+        if domain not in topics:
+            src["topics"] = [domain] + topics[:3]
 
-    return deduped
+    return results
+
+def topics_needing_sources():
+    """Return user topics that have fewer than 2 active sources in the catalogue."""
+    cat = st.session_state.get("source_catalogue", {})
+    yield_counts = st.session_state.get("source_yield", {})
+    topics = all_topics_for_user()
+    needs = []
+    for t in topics:
+        if t == "Local News & Community":
+            continue
+        # Count active sources whose topics include t
+        active = 0
+        for src in cat.values():
+            if t in (src.get("topics") or []) and src.get("feed_status") == "active":
+                active += 1
+        # Also count from yield
+        if active < 2 and yield_counts:
+            # Check if any article source produced content for this topic
+            pool = st.session_state.get("feed_pool") or []
+            srcs_for_topic = {a.get("source") for a in pool if a.get("topic") == t}
+            if len(srcs_for_topic) < 2:
+                needs.append(t)
+    return needs
+
+def update_source_health(pool):
+    """Track per-source article yield from the latest candidate pool.
+
+    Builds ``source_yield`` (count of articles per source) and
+    ``source_last_seen`` (date) so the Discover page can show health and
+    stale sources can be identified. Cheap: single pass over the pool.
+    """
+    yield_counts = {}
+    today = datetime.now().strftime("%Y-%m-%d")
+    for a in (pool or []):
+        src = a.get("source")
+        if src:
+            yield_counts[src] = yield_counts.get(src, 0) + 1
+    st.session_state.source_yield = yield_counts
+    for src, count in yield_counts.items():
+        if count > 0:
+            st.session_state.source_last_seen[src] = today
+    return yield_counts
+
+def source_health_label(source_name):
+    """Return (label, color) for a source based on recent yield."""
+    yield_counts = st.session_state.get("source_yield", {})
+    last_seen = st.session_state.get("source_last_seen", {})
+    count = yield_counts.get(source_name, 0)
+    if count >= 3:
+        return "Healthy", "#15803D"
+    if count >= 1:
+        return "Active", "#3D5AFE"
+    if source_name in last_seen:
+        return "Quiet", "#B45309"
+    return "Unknown", "#8493AD"
 
 def load_articles_from_followed_sources(topic: str, subtopics=None) -> list:
     """Load articles from sources the user explicitly follows, supplementing the main pipeline."""
@@ -1373,6 +1491,8 @@ DEFAULTS = {
     "read_articles": set(),
     # Source catalogue: keyed by feed_url or homepage_url
     "source_catalogue": {},       # {url: {name, source_type, domain, feed_url, status, ...}}
+    "source_yield": {},           # {source_name: article_count} from last pool build
+    "source_last_seen": {},       # {source_name: "YYYY-MM-DD"} last refresh with articles
     "followed_sources": set(),    # set of feed_urls the user has explicitly followed
     "discover_domain": "",        # last domain searched in Discover Sources
     "discover_results": [],       # last discovery results
@@ -2308,22 +2428,36 @@ def _user_role():
     return st.session_state.get("user_role")
 
 def _reading_profile():
-    """Derive a lightweight reading profile from saved + library articles."""
+    """Derive a lightweight reading profile from saved + library + read articles.
+
+    Reads are weighted less than saves (a save is a stronger signal), and
+    repeated reads of the same source/topic accumulate so the profile
+    reflects sustained interest rather than a single click.
+    """
     topics = {}
     sources = {}
+    # Saves are the strongest signal.
     for bm in st.session_state.get("bookmarks", []):
         a = bm.get("article", {})
         t = a.get("topic"); src = a.get("source")
-        if t: topics[t] = topics.get(t, 0) + 1
-        if src: sources[src] = sources.get(src, 0) + 1
+        if t: topics[t] = topics.get(t, 0) + 2
+        if src: sources[src] = sources.get(src, 0) + 2
+    # Library (saved + read) — moderate signal.
     for a in st.session_state.get("library", []):
         t = a.get("topic"); src = a.get("source")
         if t: topics[t] = topics.get(t, 0) + 1
         if src: sources[src] = sources.get(src, 0) + 1
-    # Read articles (URLs) — credit their source/topic via library lookup
+    # Read articles: look up in the cached pool + library by URL.
     read_urls = st.session_state.get("read_articles") or set()
-    for a in st.session_state.get("library", []):
-        if a.get("url") in read_urls:
+    pool = st.session_state.get("feed_pool") or []
+    lookup = {a.get("url"): a for a in pool if a.get("url")}
+    for u in read_urls:
+        a = lookup.get(u)
+        if not a:
+            for lib in st.session_state.get("library", []):
+                if lib.get("url") == u:
+                    a = lib; break
+        if a:
             t = a.get("topic"); src = a.get("source")
             if t: topics[t] = topics.get(t, 0) + 1
             if src: sources[src] = sources.get(src, 0) + 1
@@ -3148,6 +3282,7 @@ if st.session_state.get("feed_pool_key") != _pool_key or st.session_state.get("f
             discovery_topics=_discovery_topics,
         )
     st.session_state.feed_pool = _pool
+    update_source_health(_pool)
     st.session_state.feed_pool_key = _pool_key
     st.session_state.feed_pool_errors = _pool_errors
     st.session_state.feed_discovery_topics = list(_discovery_topics)
@@ -3300,6 +3435,11 @@ with main_col:
   if cur_tab == "discover":
     st.markdown('<div style="color:#64748b;font-size:0.9rem;margin-bottom:16px">Find journals, publications and research repositories relevant to your topics.</div>', unsafe_allow_html=True)
 
+    _needs = topics_needing_sources()
+    if _needs:
+        st.caption("Thin source coverage for: " + ", ".join(_needs) +
+                   ". Discover sources for these topics to improve your feed.")
+
     disc_domain = st.text_input("Search for a domain or topic", value=active,
                                 placeholder="e.g. Public Health, Quantum Computing, Law…",
                                 key="disc_domain_input")
@@ -3339,6 +3479,9 @@ with main_col:
             with st.expander(f"{ico} **{src['name']}** — {src['source_type'].capitalize()}", expanded=False):
                 if src.get("_reason"):
                     st.caption(src["_reason"])
+                _hl, _hc = source_health_label(src.get("name", ""))
+                st.markdown(f'<span style="color:{_hc};font-size:0.78rem;font-weight:600">{_hl}</span>',
+                            unsafe_allow_html=True)
                 if src.get("description"):
                     st.markdown(f"*{src['description']}*")
                 c1, c2, c3 = st.columns([2, 2, 1])
@@ -3376,9 +3519,12 @@ with main_col:
         for furl in list(followed):
             src = cat.get(furl, {"name": furl, "source_type": "unknown"})
             ico = SOURCE_TYPE_ICONS.get(src.get("source_type", "unknown"), "📄")
-            fc1, fc2 = st.columns([5, 1])
+            fc1, fc2, fc3 = st.columns([4, 1, 1])
             fc1.markdown(f"{ico} **{src.get('name', furl[:40])}**")
-            if fc2.button("✕", key=f"unfollow_{hash(furl) % 99999}"):
+            _hl, _hc = source_health_label(src.get("name", furl))
+            fc2.markdown(f'<span style="color:{_hc};font-size:0.72rem;font-weight:600">{_hl}</span>',
+                         unsafe_allow_html=True)
+            if fc3.button("✕", key=f"unfollow_{hash(furl) % 99999}"):
                 st.session_state.followed_sources.discard(furl); st.rerun()
 
   # ── SAVED LIBRARY tab ──
