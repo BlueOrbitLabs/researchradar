@@ -2277,25 +2277,27 @@ html:has(.ow-dash) .st-key-ow-topbar [data-testid="stColumn"] { align-self: cent
 /* ── Daily briefing banner ────────────────────────────────────────────── */
 html:has(.ow-dash) .st-key-ow-briefing {
   background: linear-gradient(105deg, #102A8F 0%, #1748D7 55%, #2864F8 100%) !important;
-  border-radius: 12px !important; padding: 14px 16px !important;
-  box-shadow: 0 8px 22px rgba(61,90,254,0.18) !important;
+  border-radius: 12px !important; padding: 12px 16px !important;
+  box-shadow: 0 6px 18px rgba(16,42,143,0.18) !important;
   color: #FFFFFF !important; gap: 4px !important;
 }
 html:has(.ow-dash) .st-key-ow-briefing [data-testid="stHorizontalBlock"] {
-  align-items: center !important; gap: 14px !important;
+  align-items: center !important; gap: 12px !important;
 }
-.ow-briefing-left { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.ow-briefing-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .ow-briefing-icon {
-  width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
   background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.25);
   display: flex; align-items: center; justify-content: center;
 }
+.ow-briefing-text { min-width: 0; }
 .ow-briefing-kicker {
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em;
-  text-transform: uppercase; color: rgba(255,255,255,0.72); margin-bottom: 2px;
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: rgba(255,255,255,0.7); margin-bottom: 1px;
 }
-.ow-briefing-h { font-size: 0.95rem; font-weight: 700; color: #FFFFFF; margin: 0; line-height: 1.3; }
-.ow-briefing-sub { font-size: 0.72rem; color: rgba(255,255,255,0.82); margin-top: 2px; line-height: 1.4; }
+.ow-briefing-h { font-size: 0.95rem; font-weight: 700; color: #FFFFFF; margin: 0; line-height: 1.25; }
+.ow-briefing-date { font-size: 0.7rem; font-weight: 400; color: rgba(255,255,255,0.7); }
+.ow-briefing-sub { font-size: 0.7rem; color: rgba(255,255,255,0.8); margin-top: 1px; line-height: 1.35; }
 html:has(.ow-dash) .st-key-ow-open-briefing button {
   width: 100% !important; min-height: 34px !important; height: 34px !important;
   background: rgba(255,255,255,0.14) !important;
@@ -2572,7 +2574,7 @@ html:has(.ow-dash) a { color: var(--blue); }
   html:has(.ow-dash) .st-key-ow-briefing [data-testid="stColumn"] {
     flex: 1 1 100% !important; width: 100% !important;
   }
-  html:has(.ow-dash) .st-key-ow-briefing { padding: 14px !important; }
+  html:has(.ow-dash) .st-key-ow-briefing { padding: 10px 12px !important; }
   .ow-briefing-h { font-size: 1rem; }
   .ow-card-title { font-size: 1rem; }
   .ow-card-summary { font-size: 0.84rem; }
@@ -4099,13 +4101,13 @@ with main_col:
             st.markdown(f'''
             <div class="ow-briefing-left">
               <div class="ow-briefing-icon">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true">
                   <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/>
                 </svg>
               </div>
-              <div>
-                <div class="ow-briefing-kicker">Daily briefing · {today}</div>
-                <div class="ow-briefing-h">Your daily briefing</div>
+              <div class="ow-briefing-text">
+                <div class="ow-briefing-kicker">Daily briefing</div>
+                <div class="ow-briefing-h">Your daily briefing <span class="ow-briefing-date">· {today}</span></div>
                 <div class="ow-briefing-sub">{briefing["total"]} eligible articles from {briefing["publishers"]} publishers in the last {briefing["window_days"]} days</div>
               </div>
             </div>''', unsafe_allow_html=True)
