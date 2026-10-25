@@ -2189,7 +2189,8 @@ html:has(.ow-dash) .st-key-ow-interests [data-testid="stIconMaterial"] {
 html:has(.ow-dash) .st-key-ow-interests button[kind="primary"] [data-testid="stIconMaterial"] {
   color: var(--blue) !important;
 }
-html:has(.ow-dash) .st-key-ow-interests { max-height: 30vh; overflow-y: auto; gap: 0 !important; }
+html:has(.ow-dash) .st-key-ow-interests { max-height: 28vh; overflow-y: auto; gap: 0 !important; padding: 0 !important; }
+html:has(.ow-dash) .st-key-ow-interests .stButton button { min-height: 26px !important; padding: 3px 9px !important; font-size: 0.68rem !important; gap: 6px !important; }
 html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar { width: 5px; }
 html:has(.ow-dash) .st-key-ow-interests::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
@@ -2198,9 +2199,9 @@ html:has(.ow-dash) .st-key-manage_interests button,
 html:has(.ow-dash) .st-key-settings_btn button {
   justify-content: flex-start !important; background: transparent !important;
   border: none !important; box-shadow: none !important;
-  color: var(--blue) !important; font-size: 0.81rem !important;
-  font-weight: 600 !important; padding: 7px 9px !important;
-  min-height: 30px !important;
+  color: var(--blue) !important; font-size: 0.68rem !important;
+  font-weight: 600 !important; padding: 4px 9px !important;
+  min-height: 26px !important;
 }
 html:has(.ow-dash) .st-key-settings_btn button { color: var(--muted) !important; font-weight: 500 !important; }
 html:has(.ow-dash) .st-key-manage_interests button:hover { background: var(--soft-blue) !important; }
@@ -2296,7 +2297,9 @@ html:has(.ow-dash) .st-key-ow-feed-tabs [data-testid="stHorizontalBlock"] {
 }
 html:has(.ow-dash) .st-key-ow-feed-tabs [data-testid="stHorizontalBlock"]::-webkit-scrollbar { display: none; }
 html:has(.ow-dash) .st-key-ow-feed-tabs [data-testid="stColumn"] { min-width: 138px; }
-html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button {
+html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button,
+html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button[kind="secondary"],
+html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button[kind="primary"] {
   width: 100% !important; min-height: 38px !important;
   background: transparent !important; border: none !important;
   border-bottom: 2px solid transparent !important; border-radius: 0 !important;
@@ -2312,7 +2315,7 @@ html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button:hover {
 }
 html:has(.ow-dash) .st-key-ow-feed-tabs .stButton button[kind="primary"] {
   color: var(--blue) !important; border-bottom-color: var(--blue) !important;
-  background: transparent !important;
+  background: transparent !important; font-weight: 700 !important;
 }
 
 /* ── Article cards ────────────────────────────────────────────────────── */
@@ -4261,10 +4264,11 @@ with main_col:
                                     f'alt="" loading="lazy" '
                                     f'onerror="this.style.display=\'none\'">', unsafe_allow_html=True)
                     else:
-                        st.markdown('<div style="width:100%;height:92px;background:#F0F3F8;'
-                                    'border-radius:8px;display:flex;align-items:center;'
-                                    'justify-content:center;color:#B0B8C8;font-size:0.6rem;">'
-                                    '</div>', unsafe_allow_html=True)
+                        _topic_ico = topic_icon(art.get("topic", "")) if "topic_icon" in dir() else "📄"
+                        st.markdown(f'<div style="width:100%;height:92px;background:linear-gradient(135deg,#EDF3FF,#F5F8FE);'
+                                    f'border-radius:8px;display:flex;align-items:center;'
+                                    f'justify-content:center;font-size:1.4rem;opacity:0.5;">'
+                                    f'{_topic_ico}</div>', unsafe_allow_html=True)
                 with _c_head:
                     st.markdown(f'''
                     {read_flag}
