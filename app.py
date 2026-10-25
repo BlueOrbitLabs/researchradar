@@ -466,8 +466,37 @@ def _fetch_rss(url: str, label: str, topic: str, max_items: int = 10) -> list:
             if not title or not link:
                 continue
             summary = re.sub(r"<[^>]+>", " ", e.get("summary", "") or "").strip()
+            # Extract image URL from RSS media/enclosures.
+            image_url = ""
+            # media_thumbnail
+            mt = e.get("media_thumbnail")
+            if mt and isinstance(mt, list) and mt[0].get("url"):
+                image_url = mt[0]["url"]
+            # media_content
+            if not image_url:
+                mc = e.get("media_content")
+                if mc and isinstance(mc, list):
+                    for m in mc:
+                        if m.get("url") and "image" in (m.get("medium") or m.get("type") or ""):
+                            image_url = m["url"]
+                            break
+                    if not image_url and mc and isinstance(mc, list) and mc[0].get("url"):
+                        image_url = mc[0]["url"]
+            # enclosures
+            if not image_url:
+                for enc in (e.get("enclosures") or []):
+                    if "image" in (enc.get("type") or "") and enc.get("href"):
+                        image_url = enc["href"]
+                        break
+            # links with rel="enclosure"
+            if not image_url:
+                for l in (e.get("links") or []):
+                    if l.get("rel") == "enclosure" and "image" in (l.get("type") or ""):
+                        image_url = l.get("href", "")
+                        break
             record = _make_article(title=title, url=link, summary=summary,
-                                   date_str=_parse_date(e), source=label, topic=topic)
+                                   date_str=_parse_date(e), source=label, topic=topic,
+                                   image=image_url)
             if label.lower() in cq.AGGREGATOR_SOURCES:
                 record["retrieved_via"] = label
                 record["source"] = cq.publisher(record) or label
@@ -2397,6 +2426,31 @@ html:has(.ow-dash) [class*="st-key-ow-actions-"] .stButton button[kind="primary"
   color: var(--blue) !important;
 }
 
+/* Secondary action row: muted, compact, less prominent */
+html:has(.ow-dash) [class*="st-key-ow-secondary-"] {
+  gap: 4px !important; flex-wrap: wrap !important; margin-top: 2px;
+}
+html:has(.ow-dash) [class*="st-key-ow-secondary-"] [data-testid="stElementContainer"] {
+  width: auto !important; flex: 0 0 auto !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-secondary-"] .stButton button {
+  width: auto !important; min-height: 20px !important; height: 20px !important;
+  background: transparent !important; border: none !important;
+  border-radius: 6px !important; color: var(--meta) !important;
+  font-size: 0.6rem !important; font-weight: 500 !important;
+  padding: 0 6px !important; box-shadow: none !important;
+  white-space: nowrap !important; gap: 3px !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-secondary-"] .stButton button p {
+  font-size: 0.6rem !important; font-weight: 500 !important; color: inherit !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-secondary-"] .stButton button [data-testid="stIconMaterial"] {
+  font-size: 12px !important; color: inherit !important;
+}
+html:has(.ow-dash) [class*="st-key-ow-secondary-"] .stButton button:hover {
+  background: var(--soft-blue) !important; color: var(--blue) !important;
+}
+
 /* AI panels stay inside the card */
 html:has(.ow-dash) [data-testid="stExpander"] {
   border: 1px solid var(--divider) !important; border-radius: 10px !important;
@@ -3565,7 +3619,7 @@ with main_col:
                   f'<div class="ow-page-title">{_page_titles.get(cur_tab, "Owlume")}</div>',
                   unsafe_allow_html=True)
       with _tb_bell:
-          if st.button("Alerts", key="ow_bell", icon=":material/notifications:",
+          if st.button("", key="ow_bell", icon=":material/notifications:",
                        help="View alerts"):
               _navigate("alerts"); st.rerun()
       with _tb_user:
@@ -4174,6 +4228,15 @@ with main_col:
                 rel_badge = '<span class="ow-card-badge high">● High match</span>'
             elif label == "relevant":
                 rel_badge = '<span class="ow-card-badge relevant">● Relevant</span>'
+            # Historical indicator for old articles (>1 year).
+            _pub = cq.parse_date(art.get("date"))
+            _is_historical = False
+            if _pub:
+                from datetime import date as _d
+                if (_d.today() - _pub.date()).days > 365:
+                    _is_historical = True
+            if _is_historical:
+                rel_badge += '<span class="ow-card-badge" style="background:#F1F5F9;color:#64748B;">Historical</span>'
             read_badge = '<span class="ow-card-badge read">✓ Read</span>' if is_read else ""
             chips_html = "".join(
                 f'<span class="ow-card-chip">{_html.escape(c)}</span>' for c in chips)
@@ -4182,7 +4245,19 @@ with main_col:
             chips_block = f'<div class="ow-card-chips">{chips_html}</div>' if chips_html else ""
 
             with st.container(key=f"art-{ak}"):
-                _c_head, _c_save = st.columns([9, 1], gap="small")
+                _img_url = art.get("image", "") or ""
+                _c_img, _c_head, _c_save = st.columns([1.2, 7.5, 1], gap="small")
+                with _c_img:
+                    if _img_url:
+                        st.markdown(f'<img src="{_html.escape(_img_url, quote=True)}" '
+                                    f'style="width:100%;height:92px;object-fit:cover;border-radius:8px;" '
+                                    f'alt="" loading="lazy" '
+                                    f'onerror="this.style.display=\'none\'">', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div style="width:100%;height:92px;background:#EEF1F6;'
+                                    'border-radius:8px;display:flex;align-items:center;'
+                                    'justify-content:center;color:#8793A8;font-size:0.6rem;">'
+                                    'No image</div>', unsafe_allow_html=True)
                 with _c_head:
                     st.markdown(f'''
                     {read_flag}
@@ -4229,6 +4304,16 @@ with main_col:
                         st.session_state[f"inline_result_{ak}"] = _ai_display(result)
                         st.session_state[f"inline_type_{ak}"] = "why_matters"
                         st.rerun()
+                    if st.button("Ask Owlume", key=f"ask_art-{ak}", icon=":material/forum:",
+                                 help="Ask Owlume about this article"):
+                        st.session_state.chat_history = [
+                            {"role": "user", "content": f"Tell me more about: {title}"}
+                        ]
+                        _navigate("ask")
+                        st.rerun()
+
+                # Secondary actions — compact, muted.
+                with st.container(key=f"ow-secondary-{ak}", horizontal=True, gap="small"):
                     if st.button("Read" if is_read else "Mark read", key=f"rd-{ak}",
                                  icon=":material/check_circle:" if is_read else ":material/visibility:",
                                  help="Mark as unread" if is_read else "Mark as read"):
@@ -4238,26 +4323,15 @@ with main_col:
                             st.session_state.read_articles.add(url)
                             add_to_library(art)
                         st.rerun()
-                    if st.button("Ask Owlume", key=f"ask_art-{ak}", icon=":material/forum:",
-                                 help="Ask Owlume about this article"):
-                        st.session_state.chat_history = [
-                            {"role": "user", "content": f"Tell me more about: {title}"}
-                        ]
-                        _navigate("ask")
-                        st.rerun()
-
-                    # Follow the article's source — soft influence on future ranking.
                     _src_name = source
                     if _src_name and _src_name not in st.session_state.followed_sources:
-                        if st.button("Follow source", key=f"follow-{ak}",
+                        if st.button("Follow", key=f"follow-{ak}",
                                      icon=":material/rss_feed:",
-                                     help=f"Follow {_src_name} for more like this"):
+                                     help=f"Follow {_src_name}"):
                             st.session_state.followed_sources.add(_src_name)
                             st.rerun()
-
-                    # Lightweight feedback — "Less like this" / "Not relevant".
                     _fb_key = f"{art.get('topic','')}::{_src_name}"
-                    if st.button("Less like this", key=f"less-{ak}",
+                    if st.button("Less", key=f"less-{ak}",
                                  icon=":material/thumb_down:",
                                  help="Show fewer like this"):
                         st.session_state.negative_feedback.add(_fb_key)
