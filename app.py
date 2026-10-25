@@ -2154,7 +2154,7 @@ html:has(.ow-dash) [data-testid="stColumn"]:has(.ow-sidebar-marker) > [data-test
 .ow-sb-label {
   font-size: 0.62rem; font-weight: 700; color: var(--meta);
   text-transform: uppercase; letter-spacing: 0.09em;
-  margin: 10px 9px 4px;
+  margin: 6px 9px 2px;
 }
 
 /* Sidebar navigation + interest buttons: compact, light, never filled black */
@@ -2205,7 +2205,7 @@ html:has(.ow-dash) .st-key-settings_btn button {
 html:has(.ow-dash) .st-key-settings_btn button { color: var(--muted) !important; font-weight: 500 !important; }
 html:has(.ow-dash) .st-key-manage_interests button:hover { background: var(--soft-blue) !important; }
 html:has(.ow-dash) .st-key-settings_btn button:hover { color: var(--blue) !important; }
-.ow-sb-divider { height: 1px; background: var(--divider); margin: 12px 8px 6px; }
+.ow-sb-divider { height: 1px; background: var(--divider); margin: 6px 8px 3px; }
 
 /* ── Top toolbar ──────────────────────────────────────────────────────── */
 html:has(.ow-dash) .st-key-ow-topbar [data-testid="stHorizontalBlock"] {
@@ -2449,6 +2449,12 @@ html:has(.ow-dash) [class*="st-key-ow-secondary-"] .stButton button [data-testid
 }
 html:has(.ow-dash) [class*="st-key-ow-secondary-"] .stButton button:hover {
   background: var(--soft-blue) !important; color: var(--blue) !important;
+}
+
+/* Article thumbnail consistency */
+html:has(.ow-dash) [class*="st-key-art-"] img {
+  border-radius: 8px !important; object-fit: cover !important;
+  display: block !important;
 }
 
 /* AI panels stay inside the card */
@@ -4255,10 +4261,10 @@ with main_col:
                                     f'alt="" loading="lazy" '
                                     f'onerror="this.style.display=\'none\'">', unsafe_allow_html=True)
                     else:
-                        st.markdown('<div style="width:100%;height:92px;background:#EEF1F6;'
+                        st.markdown('<div style="width:100%;height:92px;background:#F0F3F8;'
                                     'border-radius:8px;display:flex;align-items:center;'
-                                    'justify-content:center;color:#8793A8;font-size:0.6rem;">'
-                                    'No image</div>', unsafe_allow_html=True)
+                                    'justify-content:center;color:#B0B8C8;font-size:0.6rem;">'
+                                    '</div>', unsafe_allow_html=True)
                 with _c_head:
                     st.markdown(f'''
                     {read_flag}
