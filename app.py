@@ -2946,41 +2946,6 @@ if st.session_state.screen == "interests":
                                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # ── Can't find your topic? — compact row ──
-        st.markdown('<div class="ow-cant-find"><div class="ow-cant-find-h">Can\'t find your topic?</div><div class="ow-cant-find-sub">Type one or more topics separated by commas — we\'ll add them to your feed.</div></div>', unsafe_allow_html=True)
-        ci1, ci2 = st.columns([4, 1])
-        custom_raw = ci1.text_input("Add topics", placeholder="e.g. Dentistry, News, Yoga…",
-                                    key="custom_topic_input", label_visibility="collapsed")
-        if ci2.button("Add  +", key="add_custom", type="primary"):
-            # Split on commas, strip, dedupe case-insensitively
-            parts = [p.strip() for p in custom_raw.split(",") if p.strip()]
-            existing_lower = {t.lower() for t in st.session_state.selected_topics + st.session_state.custom_topics}
-            added, skipped = [], []
-            for part in parts:
-                if not part:
-                    continue
-                if part.lower() in existing_lower:
-                    skipped.append(part)
-                    continue
-                matched = fuzzy_match_topic(part)
-                if matched:
-                    if matched.lower() not in existing_lower:
-                        st.session_state.selected_topics.append(matched)
-                        existing_lower.add(matched.lower())
-                        added.append(matched)
-                    else:
-                        skipped.append(part)
-                else:
-                    st.session_state.custom_topics.append(part)
-                    existing_lower.add(part.lower())
-                    added.append(part)
-            if added:
-                st.success(f"Added: {', '.join(added)}")
-            if skipped:
-                st.info(f"Already selected: {', '.join(skipped)}")
-            if added or skipped:
-                st.rerun()
-
         # ── Selected interests strip ──
         all_sel = list(dict.fromkeys(st.session_state.selected_topics + st.session_state.custom_topics))
         # Deduplicate display (case-insensitive, keeping first occurrence)
