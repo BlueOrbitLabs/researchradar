@@ -1624,18 +1624,20 @@ def add_bookmark(art, cat="Read later"):
         if uid:
             try:
                 import persistence as _p
-                _p.save_bookmark(uid, art, cat)
+                if not _p.save_bookmark(uid, art, cat):
+                    st.warning("Could not save bookmark.")
             except Exception:
-                pass
+                st.warning("Could not save bookmark.")
 def remove_bookmark(url):
     st.session_state.bookmarks = [b for b in st.session_state.bookmarks if b["article"]["url"] != url]
     uid = _auth_user_id()
     if uid:
         try:
             import persistence as _p
-            _p.remove_bookmark_persistent(uid, url)
+            if not _p.remove_bookmark_persistent(uid, url):
+                st.warning("Could not remove bookmark.")
         except Exception:
-            pass
+            st.warning("Could not remove bookmark.")
 def add_to_library(art):
     normalized = fs.normalize_article(art)
     urls = {a["url"] for a in st.session_state.library}
@@ -3229,10 +3231,12 @@ if st.session_state.screen == "interests":
                 if uid:
                     try:
                         import persistence as _p
-                        _p.save_interests(uid, all_topics_for_user())
-                        _p.save_subtopics(uid, st.session_state.subtopics)
+                        if not _p.save_interests(uid, all_topics_for_user()):
+                            st.warning("Could not save interests.")
+                        if not _p.save_subtopics(uid, st.session_state.subtopics):
+                            st.warning("Could not save subtopics.")
                     except Exception:
-                        pass
+                        st.warning("Could not save interests.")
                 st.session_state.screen = "discover_prefs"; st.rerun()
     st.stop()
 
@@ -3296,10 +3300,11 @@ if st.session_state.screen == "discover_prefs":
                 if uid:
                     try:
                         import persistence as _p
-                        _p.save_preferences(uid, st.session_state.discover_preferences,
-                                           list(st.session_state.get("disabled_subtypes", set())))
+                        if not _p.save_preferences(uid, st.session_state.discover_preferences,
+                                                  list(st.session_state.get("disabled_subtypes", set()))):
+                            st.warning("Could not save preferences.")
                     except Exception:
-                        pass
+                        st.warning("Could not save preferences.")
                 st.session_state.screen = "local_setup"; st.rerun()
         with nav3:
             if st.button("Skip", key="pref_skip"):
@@ -3401,6 +3406,16 @@ if st.session_state.screen == "local_setup":
                     st.session_state.local_region = region_val.strip()
                     st.session_state.local_source_catalogue = {}
                     st.session_state.local_sources_city = ""
+                    uid = _auth_user_id()
+                    if uid:
+                        try:
+                            import persistence as _p
+                            if not _p.save_local_config(uid, st.session_state.local_city,
+                                                       st.session_state.local_region,
+                                                       st.session_state.local_interests):
+                                st.warning("Could not save local settings to your account.")
+                        except Exception:
+                            st.warning("Could not save local settings to your account.")
                 st.session_state.screen = "review"; st.rerun()
         with nav3:
             if st.button("Skip", key="local_skip"):
@@ -3599,35 +3614,25 @@ if st.session_state.screen == "auth":
     st.stop()
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
-def _auth_user_id():
-    """Return the authenticated user ID, or None."""
-    uid = st.session_state.get("auth_user_id")
-    if uid:
-        return uid
-    try:
-        import persistence as _p
-        uid = _p.get_current_user_id()
-        if uid:
-            st.session_state.auth_user_id = uid
-            st.session_state.auth_email = _p.get_current_user_email()
-            return uid
-    except Exception:
-        pass
-    return None
-
-def _is_authenticated():
-    return _auth_user_id() is not None
-
-def _sign_out():
+def _clear_auth_state():
+    """Clear authentication and all user-specific session state."""
     try:
         import persistence as _p
         _p.sign_out()
+    except Exception:
+        pass
+    # Remove per-session client so a fresh, unauthenticated client is used.
+    try:
+        if "_supabase_client" in st.session_state:
+            del st.session_state["_supabase_client"]
     except Exception:
         pass
     st.session_state.auth_user_id = None
     st.session_state.auth_email = None
     st.session_state._data_loaded = False
     st.session_state._bookmarks_loaded = False
+    st.session_state._data_load_attempted = False
+    st.session_state.pop("_data_load_error", None)
     st.session_state.bookmarks = []
     st.session_state.selected_topics = []
     st.session_state.custom_topics = []
@@ -3640,8 +3645,47 @@ def _sign_out():
     st.session_state.local_city = ""
     st.session_state.local_region = ""
     st.session_state.local_interests = []
+    st.session_state.library = []
+
+def _auth_user_id():
+    """Return the verified authenticated user ID, or None.
+
+    Identity is always taken from the current Supabase session (anon key),
+    never trusted from st.session_state alone. A mismatch between the stored
+    ID and the verified session clears all user state.
+    """
+    try:
+        import persistence as _p
+        verified = _p.get_current_user_id()
+    except Exception:
+        verified = None
+    stored = st.session_state.get("auth_user_id")
+    if verified:
+        if stored and str(stored) != str(verified):
+            # Mismatch: clear stale state
+            _clear_auth_state()
+            return None
+        st.session_state.auth_user_id = verified
+        try:
+            import persistence as _p
+            st.session_state.auth_email = _p.get_current_user_email()
+        except Exception:
+            pass
+        return verified
+    # No verified session: clear any stale identity
+    if stored:
+        _clear_auth_state()
+    return None
+
+def _is_authenticated():
+    return _auth_user_id() is not None
+
+def _sign_out():
+    _clear_auth_state()
     st.session_state._data_loaded = False
     st.session_state._bookmarks_loaded = False
+    st.session_state._data_load_attempted = False
+    st.session_state.pop("_data_load_error", None)
     st.session_state.bookmarks = []
     st.session_state.selected_topics = []
     st.session_state.custom_topics = []
@@ -3659,64 +3703,53 @@ def _sign_out():
 
 # Load persisted data when authenticated.
 _uid = _auth_user_id()
-if _uid and not st.session_state.get("_data_loaded"):
+if _uid and not st.session_state.get("_data_loaded") and not st.session_state.get("_data_load_attempted"):
+    st.session_state["_data_load_attempted"] = True
     try:
         import persistence as _p
         # Bookmarks
         _loaded = _p.load_bookmarks(_uid)
-        if _loaded:
-            _arts = []
-            for _bm in _loaded:
-                _arts.append({"article": {"title": _bm.get("article_title", ""),
-                                          "url": _bm.get("article_url", ""),
-                                          "source": _bm.get("article_source", ""),
-                                          "topic": _bm.get("article_topic", ""),
-                                          "summary": _bm.get("article_summary", "")},
-                             "category": _bm.get("category", "Read later"),
-                             "saved_at": _bm.get("saved_at", "")})
-            st.session_state.bookmarks = _arts
-        # Interests
-        _interests = _p.load_interests(_uid)
-        if _interests:
-            st.session_state.selected_topics = _interests
+        _arts = []
+        for _bm in (_loaded or []):
+            _arts.append({"article": {"title": _bm.get("article_title", ""),
+                                      "url": _bm.get("article_url", ""),
+                                      "source": _bm.get("article_source", ""),
+                                      "topic": _bm.get("article_topic", ""),
+                                      "summary": _bm.get("article_summary", "")},
+                         "category": _bm.get("category", "Read later"),
+                         "saved_at": _bm.get("saved_at", "")})
+        st.session_state.bookmarks = _arts
+        # Interests (empty DB value clears stale session state)
+        st.session_state.selected_topics = _p.load_interests(_uid) or []
         # Subtopics
-        _subs = _p.load_subtopics(_uid)
-        if _subs:
-            st.session_state.subtopics = _subs
+        st.session_state.subtopics = _p.load_subtopics(_uid) or {}
         # Preferences
-        _prefs = _p.load_preferences(_uid)
-        if _prefs.get("preferences"):
-            st.session_state.discover_preferences = _prefs["preferences"]
-        if _prefs.get("disabled_subtypes"):
-            st.session_state.disabled_subtypes = set(_prefs["disabled_subtypes"])
+        _prefs = _p.load_preferences(_uid) or {"preferences": [], "disabled_subtypes": []}
+        st.session_state.discover_preferences = _prefs.get("preferences", []) or []
+        st.session_state.disabled_subtypes = set(_prefs.get("disabled_subtypes", []) or [])
         # Followed sources
-        _followed = _p.load_followed_sources(_uid)
-        if _followed:
-            st.session_state.followed_sources = _followed
+        st.session_state.followed_sources = _p.load_followed_sources(_uid) or set()
         # Negative feedback
-        _nf = _p.load_negative_feedback(_uid)
-        if _nf:
-            st.session_state.negative_feedback = _nf
+        st.session_state.negative_feedback = _p.load_negative_feedback(_uid) or set()
         # Read articles
-        _read = _p.load_read_articles(_uid)
-        if _read:
-            st.session_state.read_articles = _read
+        st.session_state.read_articles = _p.load_read_articles(_uid) or set()
         # Alerts
-        _alerts = _p.load_alerts(_uid)
-        if _alerts:
-            st.session_state.alerts = _alerts
+        st.session_state.alerts = _p.load_alerts(_uid) or []
         # Local config
-        _local = _p.load_local_config(_uid)
-        if _local.get("city"):
-            st.session_state.local_city = _local["city"]
-        if _local.get("region"):
-            st.session_state.local_region = _local["region"]
-        if _local.get("interests"):
-            st.session_state.local_interests = _local["interests"]
+        _local = _p.load_local_config(_uid) or {"city": "", "region": "", "interests": []}
+        st.session_state.local_city = _local.get("city", "") or ""
+        st.session_state.local_region = _local.get("region", "") or ""
+        st.session_state.local_interests = _local.get("interests", []) or []
         st.session_state._data_loaded = True
         st.session_state._bookmarks_loaded = True
-    except Exception:
-        pass
+    except Exception as _exc:
+        st.session_state["_data_load_error"] = str(_exc)
+        logger = None
+        try:
+            import logging as _lg
+            _lg.getLogger("owlume").warning("Failed to load persisted data: %s", _exc)
+        except Exception:
+            pass
 
 # SCREEN: MAIN FEED
 # ═══════════════════════════════════════════════════════════
@@ -3918,6 +3951,17 @@ with sidebar_col:
                  use_container_width=True):
         st.session_state.screen = "interests"; st.rerun()
 
+    # Account / sign-out
+    if _is_authenticated():
+        _email = st.session_state.get("auth_email") or ""
+        if _email:
+            st.caption(f"Signed in: {_email}")
+        if st.button("Sign out", key="sign_out_btn", icon=":material/logout:",
+                     use_container_width=True):
+            _sign_out()
+            st.session_state.screen = "welcome"
+            st.rerun()
+
 # ══════════════════════
 # MAIN CONTENT AREA — tabbed
 # ══════════════════════
@@ -3993,20 +4037,30 @@ with main_col:
                      if type_filter == "All" or s["source_type"].capitalize() == type_filter]
 
         # Batch follow: follow all recommended sources in one click.
-        _batch_keys = [s.get("feed_url") or s.get("homepage_url") or s.get("name")
-                      for s in shown]
-        _unfollowed_batch = [k for k in _batch_keys
-                            if k not in st.session_state.followed_sources]
+        _batch_names = [s.get("name") for s in shown if s.get("name")]
+        _unfollowed_batch = [n for n in _batch_names
+                            if n not in st.session_state.followed_sources]
         if _unfollowed_batch and st.button(
                 f"Follow all recommended ({len(_unfollowed_batch)})",
                 key="batch_follow", icon=":material/rss_feed:"):
-            for k in _unfollowed_batch:
-                st.session_state.followed_sources.add(k)
+            for n in _unfollowed_batch:
+                st.session_state.followed_sources.add(n)
+            uid = _auth_user_id()
+            if uid:
+                try:
+                    import persistence as _p
+                    for n in _unfollowed_batch:
+                        src = next((x for x in shown if x.get("name") == n), {})
+                        if not _p.follow_source(uid, n, src.get("feed_url") or ""):
+                            st.warning("Could not save followed source.")
+                except Exception:
+                    st.warning("Could not save followed source.")
             st.rerun()
 
         for src in shown:
             key = src.get("feed_url") or src.get("homepage_url") or src["name"]
-            is_followed = key in st.session_state.followed_sources
+            src_name = src.get("name") or key
+            is_followed = src_name in st.session_state.followed_sources
             feed_ok = src.get("feed_status") == "active"
             feed_label = "✅ Live feed" if feed_ok else ("🔗 No feed" if src.get("feed_status") == "none" else "⚠️ Feed unknown")
             ico = SOURCE_TYPE_ICONS.get(src["source_type"], "📄")
@@ -4037,13 +4091,29 @@ with main_col:
                     btn_label = "★ Unfollow" if is_followed else "＋ Follow"
                     if st.button(btn_label, key=f"follow_{hash(key) % 99999}", use_container_width=True):
                         if is_followed:
-                            st.session_state.followed_sources.discard(key)
+                            st.session_state.followed_sources.discard(src_name)
+                            uid = _auth_user_id()
+                            if uid:
+                                try:
+                                    import persistence as _p
+                                    if not _p.unfollow_source(uid, src_name):
+                                        st.warning("Could not update followed source.")
+                                except Exception:
+                                    st.warning("Could not update followed source.")
                         else:
                             # Validate feed before following
                             if not feed_ok and src.get("feed_url"):
                                 status = validate_rss_feed(src["feed_url"])
                                 st.session_state.source_catalogue[key]["feed_status"] = status
-                            st.session_state.followed_sources.add(key)
+                            st.session_state.followed_sources.add(src_name)
+                            uid = _auth_user_id()
+                            if uid:
+                                try:
+                                    import persistence as _p
+                                    if not _p.follow_source(uid, src_name, src.get("feed_url") or ""):
+                                        st.warning("Could not save followed source.")
+                                except Exception:
+                                    st.warning("Could not save followed source.")
                         st.rerun()
     elif st.session_state.discover_domain:
         st.info("No sources found. Try a different search term.")
@@ -4056,16 +4126,30 @@ with main_col:
         st.markdown("---")
         st.markdown(f"**📌 Followed sources ({len(followed)})**")
         cat = st.session_state.source_catalogue
-        for furl in list(followed):
-            src = cat.get(furl, {"name": furl, "source_type": "unknown"})
+        for fname in list(followed):
+            src = None
+            for v in cat.values():
+                if v.get("name") == fname:
+                    src = v; break
+            if src is None:
+                src = {"name": fname, "source_type": "unknown"}
             ico = SOURCE_TYPE_ICONS.get(src.get("source_type", "unknown"), "📄")
             fc1, fc2, fc3 = st.columns([4, 1, 1])
-            fc1.markdown(f"{ico} **{src.get('name', furl[:40])}**")
-            _hl, _hc = source_health_label(src.get("name", furl))
+            fc1.markdown(f"{ico} **{src.get('name', fname[:40])}**")
+            _hl, _hc = source_health_label(src.get("name", fname))
             fc2.markdown(f'<span style="color:{_hc};font-size:0.72rem;font-weight:600">{_hl}</span>',
                          unsafe_allow_html=True)
-            if fc3.button("✕", key=f"unfollow_{hash(furl) % 99999}"):
-                st.session_state.followed_sources.discard(furl); st.rerun()
+            if fc3.button("✕", key=f"unfollow_{hash(fname) % 99999}"):
+                st.session_state.followed_sources.discard(fname)
+                uid = _auth_user_id()
+                if uid:
+                    try:
+                        import persistence as _p
+                        if not _p.unfollow_source(uid, fname):
+                            st.warning("Could not update followed source.")
+                    except Exception:
+                        st.warning("Could not update followed source.")
+                st.rerun()
 
   # ── SAVED LIBRARY tab ──
   elif cur_tab == "saved":
@@ -4222,6 +4306,14 @@ with main_col:
         if new_alert.strip() not in current_alerts:
             current_alerts.append(new_alert.strip())
             st.session_state.alerts = current_alerts
+            uid = _auth_user_id()
+            if uid:
+                try:
+                    import persistence as _p
+                    if not _p.save_alert(uid, new_alert.strip()):
+                        st.warning("Could not save alert to your account. It will remain for this session.")
+                except Exception:
+                    st.warning("Could not save alert to your account. It will remain for this session.")
         st.rerun()
 
     current_alerts = st.session_state.get("alerts", [])
@@ -4234,8 +4326,17 @@ with main_col:
             ac1, ac2 = st.columns([5, 1])
             ac1.markdown(f"🔔 **{alert_kw}** — {len(matches)} match{'es' if len(matches)!=1 else ''} in current feed")
             if ac2.button("Remove", key=f"rm_alert_{ai2}", use_container_width=True):
+                _kw = alert_kw
                 current_alerts.pop(ai2)
                 st.session_state.alerts = current_alerts
+                uid = _auth_user_id()
+                if uid:
+                    try:
+                        import persistence as _p
+                        if not _p.remove_alert(uid, _kw):
+                            st.warning("Could not remove alert from your account.")
+                    except Exception:
+                        st.warning("Could not remove alert from your account.")
                 st.rerun()
             for match_art in matches[:3]:
                 st.markdown(
@@ -4273,6 +4374,16 @@ with main_col:
                 st.session_state.local_region = region_input.strip()
                 st.session_state.local_source_catalogue = {}
                 st.session_state.local_sources_city = ""
+                uid = _auth_user_id()
+                if uid:
+                    try:
+                        import persistence as _p
+                        if not _p.save_local_config(uid, st.session_state.local_city,
+                                                   st.session_state.local_region,
+                                                   st.session_state.local_interests):
+                            st.warning("Could not save local settings to your account.")
+                    except Exception:
+                        st.warning("Could not save local settings to your account.")
                 st.rerun()
     else:
         # Location controls row
@@ -4292,6 +4403,16 @@ with main_col:
                 st.session_state.local_source_catalogue = {}
                 st.session_state.local_sources_city = ""
                 st.session_state._editing_local_city = False
+                uid = _auth_user_id()
+                if uid:
+                    try:
+                        import persistence as _p
+                        if not _p.save_local_config(uid, st.session_state.local_city,
+                                                   st.session_state.local_region,
+                                                   st.session_state.local_interests):
+                            st.warning("Could not save local settings to your account.")
+                    except Exception:
+                        st.warning("Could not save local settings to your account.")
                 st.rerun()
             if ef4.button("Cancel", key="cancel_local_edit"):
                 st.session_state._editing_local_city = False
@@ -4312,6 +4433,15 @@ with main_col:
                             st.session_state.local_interests.remove(sub)
                         else:
                             st.session_state.local_interests.append(sub)
+                        uid = _auth_user_id()
+                        if uid:
+                            try:
+                                import persistence as _p
+                                _p.save_local_config(uid, st.session_state.local_city,
+                                                     st.session_state.local_region,
+                                                     st.session_state.local_interests)
+                            except Exception:
+                                pass
                         st.rerun()
 
         # Fetch articles (cached — only runs once per 30 min per city)
@@ -4402,9 +4532,10 @@ with main_col:
                             if uid:
                                 try:
                                     import persistence as _p
-                                    _p.save_read_article(uid, url)
+                                    if not _p.save_read_article(uid, url):
+                                        st.warning("Could not save read state.")
                                 except Exception:
-                                    pass
+                                    st.warning("Could not save read state.")
                         st.rerun()
                 with la4:
                     if st.button("Ask", key=f"lask_{art_i}", use_container_width=True):
@@ -4698,9 +4829,10 @@ with main_col:
                                     if uid:
                                         try:
                                             import persistence as _p
-                                            _p.follow_source(uid, _src_name)
+                                            if not _p.follow_source(uid, _src_name):
+                                                st.warning("Could not save followed source.")
                                         except Exception:
-                                            pass
+                                            st.warning("Could not save followed source.")
                                     st.rerun()
                             _fb_key = f"{art.get('topic','')}::{_src_name}"
                             if st.button("Less like this", key=f"less-{ak}",
@@ -4711,9 +4843,10 @@ with main_col:
                                 if uid:
                                     try:
                                         import persistence as _p
-                                        _p.save_negative_feedback(uid, _fb_key)
+                                        if not _p.save_negative_feedback(uid, _fb_key):
+                                            st.warning("Could not save feedback.")
                                     except Exception:
-                                        pass
+                                        st.warning("Could not save feedback.")
                                 st.rerun()
                             if st.button("Not relevant", key=f"notrel-{ak}",
                                          icon=":material/block:", help="Mark as not relevant",
@@ -4723,9 +4856,10 @@ with main_col:
                                 if uid:
                                     try:
                                         import persistence as _p
-                                        _p.save_negative_feedback(uid, _fb_key)
+                                        if not _p.save_negative_feedback(uid, _fb_key):
+                                            st.warning("Could not save feedback.")
                                     except Exception:
-                                        pass
+                                        st.warning("Could not save feedback.")
                                 st.rerun()
 
                 # Inline AI result — revealed on demand, cached in session state.

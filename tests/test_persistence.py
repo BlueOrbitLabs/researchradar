@@ -36,6 +36,7 @@ class PersistenceAvailabilityTest(unittest.TestCase):
 class PersistenceBookmarkTest(unittest.TestCase):
     def test_save_bookmark_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.save_bookmark("user-1", {"url": "https://x.com", "title": "Test"})
@@ -44,6 +45,7 @@ class PersistenceBookmarkTest(unittest.TestCase):
 
     def test_remove_bookmark_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.remove_bookmark_persistent("user-1", "https://x.com")
@@ -51,6 +53,7 @@ class PersistenceBookmarkTest(unittest.TestCase):
 
     def test_load_bookmarks_returns_data(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"article_url": "https://x.com", "article_title": "Test"}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
@@ -62,6 +65,7 @@ class PersistenceBookmarkTest(unittest.TestCase):
 class PersistenceFollowTest(unittest.TestCase):
     def test_follow_source_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.follow_source("user-1", "Nature", "https://nature.com/feed")
@@ -70,6 +74,7 @@ class PersistenceFollowTest(unittest.TestCase):
 
     def test_unfollow_source_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.unfollow_source("user-1", "Nature")
@@ -77,6 +82,7 @@ class PersistenceFollowTest(unittest.TestCase):
 
     def test_load_followed_sources_returns_set(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"source_name": "Nature"}, {"source_name": "BBC"}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
@@ -87,6 +93,7 @@ class PersistenceFollowTest(unittest.TestCase):
 class PersistenceInterestTest(unittest.TestCase):
     def test_load_interests_returns_list(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"topic": "Health & Medicine"}, {"topic": "AI & Technology"}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
@@ -95,6 +102,7 @@ class PersistenceInterestTest(unittest.TestCase):
 
     def test_save_interests_replaces_all(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
         mock_client.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
@@ -105,6 +113,7 @@ class PersistenceInterestTest(unittest.TestCase):
 class PersistencePreferenceTest(unittest.TestCase):
     def test_load_preferences_returns_defaults_without_data(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.load_preferences("user-1")
@@ -112,6 +121,7 @@ class PersistencePreferenceTest(unittest.TestCase):
 
     def test_save_preferences_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.save_preferences("user-1", ["New research & journal publications"], ["pref::subtype"])
@@ -121,6 +131,7 @@ class PersistencePreferenceTest(unittest.TestCase):
 class PersistenceFeedbackTest(unittest.TestCase):
     def test_load_negative_feedback_returns_set(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"feedback_key": "Health::BBC"}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
@@ -129,6 +140,7 @@ class PersistenceFeedbackTest(unittest.TestCase):
 
     def test_save_negative_feedback_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.save_negative_feedback("user-1", "Health::BBC")
@@ -138,6 +150,7 @@ class PersistenceFeedbackTest(unittest.TestCase):
 class PersistenceErrorHandlingTest(unittest.TestCase):
     def test_save_bookmark_handles_exception(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.upsert.return_value.execute.side_effect = Exception("DB error")
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.save_bookmark("user-1", {"url": "https://x.com"})
@@ -145,6 +158,7 @@ class PersistenceErrorHandlingTest(unittest.TestCase):
 
     def test_load_bookmarks_handles_exception(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.side_effect = Exception("DB error")
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.load_bookmarks("user-1")
@@ -152,6 +166,7 @@ class PersistenceErrorHandlingTest(unittest.TestCase):
 
     def test_follow_source_handles_exception(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.upsert.return_value.execute.side_effect = Exception("DB error")
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.follow_source("user-1", "Nature")
@@ -161,6 +176,7 @@ class PersistenceErrorHandlingTest(unittest.TestCase):
 class PersistenceUserIsolationTest(unittest.TestCase):
     def test_different_users_get_different_data(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         # Simulate different data for different users
         def side_effect(*args, **kwargs):
             return mock_client
@@ -179,6 +195,7 @@ class PersistenceUserIsolationTest(unittest.TestCase):
 class PersistenceLocalConfigTest(unittest.TestCase):
     def test_load_local_config_returns_defaults_without_data(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.load_local_config("user-1")
@@ -186,6 +203,7 @@ class PersistenceLocalConfigTest(unittest.TestCase):
 
     def test_save_local_config_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.save_local_config("user-1", "Hyderabad", "Telangana", ["Health"])
@@ -195,6 +213,7 @@ class PersistenceLocalConfigTest(unittest.TestCase):
 class PersistenceSubtopicTest(unittest.TestCase):
     def test_load_subtopics_groups_by_topic(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"topic": "Health", "subtopic": "Epidemiology"},
                   {"topic": "Health", "subtopic": "Vaccines"},
@@ -205,6 +224,7 @@ class PersistenceSubtopicTest(unittest.TestCase):
 
     def test_save_subtopics_handles_empty(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.save_subtopics("user-1", {})
@@ -214,6 +234,7 @@ class PersistenceSubtopicTest(unittest.TestCase):
 class PersistenceAlertTest(unittest.TestCase):
     def test_load_alerts_returns_list(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"keyword": "CRISPR"}, {"keyword": "climate"}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
@@ -222,6 +243,7 @@ class PersistenceAlertTest(unittest.TestCase):
 
     def test_remove_alert_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.remove_alert("user-1", "CRISPR")
@@ -235,6 +257,7 @@ if __name__ == "__main__":
 class PersistenceAuthTest(unittest.TestCase):
     def test_sign_up_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.sign_up.return_value = MagicMock(user=MagicMock(id="user-123"))
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.sign_up("test@example.com", "password123")
@@ -243,6 +266,7 @@ class PersistenceAuthTest(unittest.TestCase):
 
     def test_sign_up_handles_failure(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.sign_up.side_effect = Exception("Email already registered")
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.sign_up("test@example.com", "password123")
@@ -251,6 +275,7 @@ class PersistenceAuthTest(unittest.TestCase):
 
     def test_sign_in_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.sign_in_with_password.return_value = MagicMock(user=MagicMock(id="user-123"))
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.sign_in("test@example.com", "password123")
@@ -259,6 +284,7 @@ class PersistenceAuthTest(unittest.TestCase):
 
     def test_sign_in_handles_failure(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.sign_in_with_password.side_effect = Exception("Invalid credentials")
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.sign_in("test@example.com", "wrong")
@@ -267,6 +293,7 @@ class PersistenceAuthTest(unittest.TestCase):
 
     def test_sign_out_calls_supabase(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.sign_out.return_value = None
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.sign_out()
@@ -274,6 +301,7 @@ class PersistenceAuthTest(unittest.TestCase):
 
     def test_sign_out_handles_failure(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.sign_out.side_effect = Exception("Network error")
         with patch.object(persistence, "_get_client", return_value=mock_client):
             result = persistence.sign_out()
@@ -281,6 +309,7 @@ class PersistenceAuthTest(unittest.TestCase):
 
     def test_get_current_user_id_returns_id(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-123"))
         with patch.object(persistence, "_get_client", return_value=mock_client):
             uid = persistence.get_current_user_id()
@@ -292,6 +321,7 @@ class PersistenceAuthTest(unittest.TestCase):
 
     def test_get_current_user_email_returns_email(self):
         mock_client = MagicMock()
+        mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(id="user-1"))
         mock_client.auth.get_user.return_value = MagicMock(user=MagicMock(email="test@example.com"))
         with patch.object(persistence, "_get_client", return_value=mock_client):
             email = persistence.get_current_user_email()

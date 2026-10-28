@@ -1507,8 +1507,9 @@ def recommend_sources(sources, user_topics, user_preferences=(), followed_source
     """Rank a list of discovered sources for a user, excluding already-followed."""
     scored = []
     for s in (sources or []):
-        key = s.get("feed_url") or s.get("homepage_url") or s.get("name")
-        if key in (followed_sources or set()):
+        name = s.get("name")
+        key = s.get("feed_url") or s.get("homepage_url") or name
+        if name in (followed_sources or set()) or key in (followed_sources or set()):
             continue
         res = score_source(s, user_topics, user_preferences, followed_sources)
         scored.append((res["score"], res["reason"], s))

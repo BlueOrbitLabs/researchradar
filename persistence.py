@@ -22,25 +22,93 @@ logger = logging.getLogger("owlume.persistence")
 
 # ── Supabase client (lazy, optional) ──────────────────────────────────────────
 
+# Backwards-compatible module global. Intentionally never populated: clients are
+# now created per Streamlit session (see create_anon_client / _get_client) so
+# that authentication state is never shared across browser sessions.
 _supabase_client = None
 
 
-def _get_client():
-    """Return the Supabase client if configured, else None."""
-    global _supabase_client
-    if _supabase_client is not None:
-        return _supabase_client
+def _read_secrets():
+    """Return (url, anon_key) from Streamlit secrets, or ('', '') if unavailable."""
     try:
         import streamlit as st
-        url = st.secrets.get("SUPABASE_URL", "") if hasattr(st, "secrets") else ""
-        key = st.secrets.get("SUPABASE_SERVICE_KEY", "") if hasattr(st, "secrets") else ""
-        if url and key:
-            from supabase import create_client
-            _supabase_client = create_client(url, key)
+        if hasattr(st, "secrets"):
+            url = st.secrets.get("SUPABASE_URL", "") or ""
+            key = st.secrets.get("SUPABASE_ANON_KEY", "") or ""
+            return str(url), str(key)
+    except Exception as exc:
+        logger.debug("Could not read secrets: %s", exc)
+    return "", ""
+
+
+def create_anon_client(url=None, key=None):
+    """Construct a Supabase client using the anon key.
+
+    When url/key are omitted, they are read from Streamlit secrets. Returns None
+    if credentials are missing or construction fails. The service-role key is
+    never used here.
+    """
+    if url is None or key is None:
+        s_url, s_key = _read_secrets()
+        if url is None:
+            url = s_url
+        if key is None:
+            key = s_key
+    if not (url and key):
+        return None
+    try:
+        from supabase import create_client
+        return create_client(url, key)
+    except Exception as exc:
+        logger.debug("Supabase client construction failed: %s", exc)
+        return None
+
+
+def _get_client():
+    """Return the per-session Supabase client (anon key), or None.
+
+    The client is stored in st.session_state so that each browser session gets
+    its own instance and authentication state is never shared across sessions.
+    """
+    try:
+        import streamlit as st
+        client = st.session_state.get("_supabase_client")
+        if client is None:
+            client = create_anon_client()
+            if client is not None:
+                st.session_state["_supabase_client"] = client
+        return client
     except Exception as exc:
         logger.debug("Supabase not available: %s", exc)
-        _supabase_client = None
-    return _supabase_client
+        return None
+
+
+def get_verified_user_id(user_id=None):
+    """Return the authenticated user's ID, rejecting mismatched caller-supplied IDs.
+
+    If a Supabase session exists, the ID is taken from the session (never from
+    the caller). If the caller supplies a different user_id, it is rejected.
+    Returns None when there is no verified session.
+    """
+    if user_id is None:
+        return None
+    client = _get_client()
+    if not client:
+        return None
+    try:
+        resp = client.auth.get_user()
+        if resp and getattr(resp, "user", None):
+            current = str(resp.user.id)
+            if str(user_id) != current:
+                logger.warning(
+                    "Rejected mismatched user_id (supplied=%s, authenticated=%s)",
+                    user_id, current,
+                )
+                return None
+            return current
+    except Exception as exc:
+        logger.debug("Could not verify user: %s", exc)
+    return None
 
 
 def is_persistent() -> bool:
@@ -94,14 +162,14 @@ def sign_out() -> bool:
 
 
 def get_current_user_id() -> Optional[str]:
-    """Return the authenticated user's ID, or None."""
+    """Return the authenticated user's ID from the current session, or None."""
     client = _get_client()
     if not client:
         return None
     try:
-        user = client.auth.get_user()
-        if user and user.user:
-            return str(user.user.id)
+        resp = client.auth.get_user()
+        if resp and getattr(resp, "user", None):
+            return str(resp.user.id)
     except Exception:
         pass
     return None
@@ -125,6 +193,7 @@ def get_current_user_email() -> Optional[str]:
 
 def load_bookmarks(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Load bookmarks for a user. Returns [] if no client or user_id."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return []
@@ -139,6 +208,7 @@ def load_bookmarks(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
 def save_bookmark(user_id: Optional[str], article: Dict[str, Any],
                   category: str = "Read later") -> bool:
     """Save a bookmark. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -160,6 +230,7 @@ def save_bookmark(user_id: Optional[str], article: Dict[str, Any],
 
 def remove_bookmark_persistent(user_id: Optional[str], url: str) -> bool:
     """Remove a bookmark. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -175,6 +246,7 @@ def remove_bookmark_persistent(user_id: Optional[str], url: str) -> bool:
 
 def load_followed_sources(user_id: Optional[str] = None) -> set:
     """Load followed sources for a user."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return set()
@@ -189,6 +261,7 @@ def load_followed_sources(user_id: Optional[str] = None) -> set:
 def follow_source(user_id: Optional[str], source_name: str,
                   source_url: str = "") -> bool:
     """Follow a source. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -206,6 +279,7 @@ def follow_source(user_id: Optional[str], source_name: str,
 
 def unfollow_source(user_id: Optional[str], source_name: str) -> bool:
     """Unfollow a source. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -221,6 +295,7 @@ def unfollow_source(user_id: Optional[str], source_name: str) -> bool:
 
 def load_interests(user_id: Optional[str] = None) -> List[str]:
     """Load user interests."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return []
@@ -234,6 +309,7 @@ def load_interests(user_id: Optional[str] = None) -> List[str]:
 
 def save_interests(user_id: Optional[str], topics: List[str]) -> bool:
     """Save user interests (replace all). Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -253,6 +329,7 @@ def save_interests(user_id: Optional[str], topics: List[str]) -> bool:
 
 def load_preferences(user_id: Optional[str] = None) -> Dict[str, Any]:
     """Load discovery preferences."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return {"preferences": [], "disabled_subtypes": []}
@@ -273,6 +350,7 @@ def load_preferences(user_id: Optional[str] = None) -> Dict[str, Any]:
 def save_preferences(user_id: Optional[str], preferences: List[str],
                      disabled_subtypes: List[str] = None) -> bool:
     """Save discovery preferences. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -292,6 +370,7 @@ def save_preferences(user_id: Optional[str], preferences: List[str],
 
 def load_negative_feedback(user_id: Optional[str] = None) -> set:
     """Load negative feedback keys."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return set()
@@ -305,6 +384,7 @@ def load_negative_feedback(user_id: Optional[str] = None) -> set:
 
 def save_negative_feedback(user_id: Optional[str], key: str) -> bool:
     """Save a negative feedback key. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -323,6 +403,7 @@ def save_negative_feedback(user_id: Optional[str], key: str) -> bool:
 
 def load_read_articles(user_id: Optional[str] = None) -> set:
     """Load read article URLs."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return set()
@@ -336,6 +417,7 @@ def load_read_articles(user_id: Optional[str] = None) -> set:
 
 def save_read_article(user_id: Optional[str], url: str) -> bool:
     """Mark an article as read. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -354,6 +436,7 @@ def save_read_article(user_id: Optional[str], url: str) -> bool:
 
 def load_alerts(user_id: Optional[str] = None) -> list:
     """Load alert keywords."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return []
@@ -367,6 +450,7 @@ def load_alerts(user_id: Optional[str] = None) -> list:
 
 def save_alert(user_id: Optional[str], keyword: str) -> bool:
     """Save an alert keyword. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -383,6 +467,7 @@ def save_alert(user_id: Optional[str], keyword: str) -> bool:
 
 def remove_alert(user_id: Optional[str], keyword: str) -> bool:
     """Remove an alert keyword. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -398,6 +483,7 @@ def remove_alert(user_id: Optional[str], keyword: str) -> bool:
 
 def load_local_config(user_id: Optional[str] = None) -> dict:
     """Load local news configuration."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return {"city": "", "region": "", "interests": []}
@@ -419,6 +505,7 @@ def load_local_config(user_id: Optional[str] = None) -> dict:
 def save_local_config(user_id: Optional[str], city: str, region: str,
                      interests: list = None) -> bool:
     """Save local news configuration. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
@@ -439,6 +526,7 @@ def save_local_config(user_id: Optional[str], city: str, region: str,
 
 def load_subtopics(user_id: Optional[str] = None) -> dict:
     """Load user subtopics."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return {}
@@ -458,6 +546,7 @@ def load_subtopics(user_id: Optional[str] = None) -> dict:
 
 def save_subtopics(user_id: Optional[str], subtopics: dict) -> bool:
     """Save user subtopics. Returns True on success."""
+    user_id = get_verified_user_id(user_id)
     client = _get_client()
     if not client or not user_id:
         return False
