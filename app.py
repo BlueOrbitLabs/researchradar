@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 import datetime as dt
 from openai import OpenAI
-from supabase import create_client
 from PIL import Image as _PILImage
 import io as _io, base64 as _b64
 
@@ -37,14 +36,7 @@ st.set_page_config(page_title="Owlume", page_icon=_fav, layout="wide", initial_s
 # Optional keys — missing values must not crash the app at boot.
 SUPABASE_URL = _get_secret("SUPABASE_URL")
 SUPABASE_ANON_KEY = _get_secret("SUPABASE_ANON_KEY")
-SUPABASE_SERVICE_KEY = _get_secret("SUPABASE_SERVICE_KEY")
 OPENAI_KEY = _get_secret("OPENAI_KEY")
-
-@st.cache_resource
-def _svc():
-    return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-svc = _svc() if SUPABASE_URL and SUPABASE_SERVICE_KEY else None
 
 LOGO_TAG = f'<img src="data:image/png;base64,{LOGO_B64}" style="width:42px;height:42px;border-radius:10px;object-fit:contain;">'
 
