@@ -14,6 +14,8 @@ import io as _io, base64 as _b64
 import feed_strategy as fs
 # Content-quality gate, relevance scoring, briefing eligibility — see content_quality.py
 import content_quality as cq
+# Optional full-text extraction (Trafilatura) — see extraction.py
+import extraction as _ext
 from xml.etree import ElementTree as ET
 
 logger = logging.getLogger("owlume")
@@ -436,15 +438,33 @@ def _make_article(title, url, summary, date_str, source, topic, relevance=0.5, *
     for key, value in extra.items():
         if value not in (None, "", [], {}):
             record[key] = value
-    return record
+    return fs.normalize_article(record)
 
 
 def _parse_date(entry):
+    """Legacy date accessor: published date first, then RSS updated fallback."""
     pub = entry.get("published_parsed") or entry.get("updated_parsed")
     if pub:
         try: return datetime(*pub[:6]).strftime("%d %b %Y")
         except: pass
     return ""
+
+
+def _parse_feed_dates(entry):
+    """Keep an RSS publication date distinct from its update timestamp."""
+    published = entry.get("published_parsed")
+    updated = entry.get("updated_parsed")
+
+    def _format(value):
+        if not value:
+            return ""
+        try:
+            return datetime(*value[:6]).strftime("%d %b %Y")
+        except (TypeError, ValueError, OverflowError):
+            return ""
+
+    return _format(published), _format(updated), ("published" if published else
+                                                  "updated" if updated else "unknown")
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -494,9 +514,20 @@ def _fetch_rss(url: str, label: str, topic: str, max_items: int = 10) -> list:
                     if l.get("rel") == "enclosure" and "image" in (l.get("type") or ""):
                         image_url = l.get("href", "")
                         break
-            record = _make_article(title=title, url=link, summary=summary,
-                                   date_str=_parse_date(e), source=label, topic=topic,
-                                   image=image_url)
+            published_date, updated_date, date_source = _parse_feed_dates(e)
+            record = _make_article(
+                title=title, url=link, summary=summary,
+                # `date` and publication_date are publication-only. Keep an
+                # RSS update timestamp in its own field instead of presenting
+                # it as the article's publication date/freshness signal.
+                date_str=published_date,
+                source=label, topic=topic, image=image_url,
+                publication_date=published_date,
+                updated_at=updated_date,
+                date_source=date_source,
+                source_adapter="rss",
+                extraction_status="feed_excerpt" if summary else "metadata_only",
+            )
             if label.lower() in cq.AGGREGATOR_SOURCES:
                 record["retrieved_via"] = label
                 record["source"] = cq.publisher(record) or label
@@ -504,6 +535,11 @@ def _fetch_rss(url: str, label: str, topic: str, max_items: int = 10) -> list:
                 # the publisher as the source and the headline as the title.
                 if record["source"] != label and " - " in title:
                     record["title"] = title.rsplit(" - ", 1)[0].strip()
+            record["source_links"] = [{
+                "source": record.get("source", ""),
+                "url": record.get("original_url") or link,
+            }]
+            record = fs.normalize_article(record)
             arts.append(record)
         return arts
     except Exception as exc:
@@ -551,6 +587,8 @@ def _fetch_openalex(query: str, topic: str, max_items: int = 10) -> list:
                 date_str=(w.get("publication_date") or "")[:10],
                 source=container or "OpenAlex", topic=topic,
                 retrieved_via="OpenAlex",
+                source_adapter="openalex",
+                extraction_status="abstract" if abstract else "metadata_only",
                 kind=w.get("type") or "", container=container,
             ))
         return arts
@@ -601,6 +639,8 @@ def _fetch_pubmed(query: str, topic: str, max_items: int = 8) -> list:
                 title=title, url=link, summary=abstract, date_str=date_str,
                 source=journal or "PubMed", topic=topic, kind="article",
                 retrieved_via="PubMed", container=journal, discipline_scoped=True,
+                source_adapter="pubmed",
+                extraction_status="abstract" if abstract else "metadata_only",
             ))
         return arts
     except Exception as exc:
@@ -642,6 +682,8 @@ def _fetch_arxiv(query: str, topic: str, cats: tuple = (), max_items: int = 8) -
                 date_str=(e.get("published") or "")[:10],
                 source="arXiv", topic=topic, kind="preprint",
                 retrieved_via="arXiv", discipline_scoped=True,
+                source_adapter="arxiv",
+                extraction_status="abstract" if e.get("summary") else "metadata_only",
             ))
         return arts
     except Exception as exc:
@@ -678,6 +720,8 @@ def _fetch_doaj(query: str, topic: str, max_items: int = 6) -> list:
                 title=title, url=link, summary=bib.get("abstract", ""),
                 date_str=str(bib.get("year", "")), source=journal or "DOAJ",
                 topic=topic, retrieved_via="DOAJ", container=journal,
+                source_adapter="doaj",
+                extraction_status="abstract" if bib.get("abstract") else "metadata_only",
             ))
         return arts
     except Exception as exc:
@@ -720,6 +764,8 @@ def _fetch_nber(query: str, topic: str, max_items: int = 8) -> list:
                 date_str=(item.get("displaydate") or "").strip(),
                 source="NBER", topic=topic, kind="working-paper",
                 retrieved_via="NBER",
+                source_adapter="nber",
+                extraction_status="abstract" if item.get("abstract") else "metadata_only",
             ))
         return arts
     except Exception as exc:
@@ -854,7 +900,7 @@ def load_topic_articles(topic: str, subtopics=None) -> list:
     # ── Deduplicate (DOI → URL → title) and order ──
     all_arts = deduplicate_articles(all_arts)
     all_arts.sort(key=lambda a: (a.get("relevance", 0),
-                                 cq.parse_date(a.get("date")) or dt.date.min),
+                                 cq.parse_date(cq.publication_date_value(a)) or dt.date.min),
                   reverse=True)
     return all_arts
 
@@ -1280,8 +1326,6 @@ def load_local_articles(city: str, region: str, interests_tuple: tuple) -> list:
 
     sources = discover_local_sources(city, region)
     all_arts: list = []
-    city_lower = city.lower()
-    region_lower = region.lower() if region else ""
     interests = list(interests_tuple)
 
     for src in sources:
@@ -1293,23 +1337,17 @@ def load_local_articles(city: str, region: str, interests_tuple: tuple) -> list:
             art["local_source_type"] = src.get("source_type", "news")
         all_arts += arts
 
-    # Relevance score: location name in title/summary = strong signal
+    # Relevance score: location name in title/summary = strong signal.
     for art in all_arts:
+        art["local_relevance"] = cq.local_relevance_score(
+            art, city, region, interests)
+        art["matched_interests"] = ["Local News & Community"]
         text = (art.get("title", "") + " " + art.get("summary", "")).lower()
-        score = 0.0
-        if city_lower and city_lower in text:
-            score += 0.5
-        if region_lower and region_lower in text:
-            score += 0.2
-        for interest in interests:
-            if interest.lower()[:6] in text:
-                score += 0.1
-        # Penalise articles that seem purely national/global with no local anchor
-        national_words = ["india", "government of india", "parliament", "supreme court of india"]
-        if not any(w in text for w in [city_lower] + ([region_lower] if region_lower else [])):
-            if any(nw in text for nw in national_words):
-                score -= 0.1
-        art["local_relevance"] = round(min(1.0, max(0.0, score)), 3)
+        art["matched_subtopics"] = [
+            interest for interest in interests
+            if interest and interest.lower()[:6] in text
+        ]
+        art["retrieval_topic"] = "Local News & Community"
 
     all_arts = deduplicate_articles(all_arts)
     all_arts.sort(key=lambda a: a.get("local_relevance", 0), reverse=True)
@@ -1520,18 +1558,43 @@ def build_explain_prompt(title, url, summary, mode="Explain", subtype="Conceptua
              "Policy Lens": "Policy implications"}.get(mode, "Explain")
     return f"""{instr}.\nTitle: \"{title}\"\n{f"URL: {url}" if url else ""}\n{f"Snippet: {summary[:400]}" if summary else ""}\n\n## 📌 What Is This?\n## 🕰️ Background\n## 📊 Current Evidence\n## 🔮 What's Next\n## 💡 Why It Matters\n\nEnd with exactly: SUGGESTIONS: q1? | q2? | q3?"""
 
-def build_summary_prompt(title, summary):
-    return f"""Write a 3-sentence AI summary of this article for a busy researcher.\nTitle: {title}\nSnippet: {summary[:300]}\nBe factual and precise."""
+def build_summary_prompt(title, summary, extracted_text=None):
+    evidence = (extracted_text or "")[:1500] if extracted_text else ""
+    if evidence:
+        return (f"""Write a 3-sentence AI summary of this article for a busy researcher.\n"""
+                f"""Title: {title}\n"""
+                f"""Extracted article text (may be partial): {evidence}\n"""
+                f"""Be factual and precise. Base the summary on the provided text only.""")
+    return f"""Write a 3-sentence AI summary of this article for a busy researcher.\nTitle: {title}\nSnippet: {summary[:300]}\nBe factual and precise. The available text is a short snippet, not the full article."""
 
-def build_takeaways_prompt(title, summary):
-    return f"""List 4-5 key takeaways from this article as bullet points.\nTitle: {title}\nSnippet: {summary[:300]}\nEach bullet: one clear, specific insight."""
+def build_takeaways_prompt(title, summary, extracted_text=None):
+    evidence = (extracted_text or "")[:1500] if extracted_text else ""
+    if evidence:
+        return (f"""List 4-5 key takeaways from this article as bullet points.\n"""
+                f"""Title: {title}\nExtracted text (may be partial): {evidence}\n"""
+                f"""Each bullet: one clear, specific insight.""")
+    return f"""List 4-5 key takeaways from this article as bullet points.\nTitle: {title}\nSnippet: {summary[:300]}\nEach bullet: one clear, specific insight. The available text is a short snippet."""
 
-def build_why_matters_prompt(title, summary):
+def build_why_matters_prompt(title, summary, extracted_text=None):
+    evidence = (extracted_text or "")[:1500] if extracted_text else ""
+    if evidence:
+        return (f"""In 2-3 sentences, explain WHY this matters — the broader significance, implications, or why a researcher should care.\n"""
+                f"""Title: {title}\nExtracted text (may be partial): {evidence}""")
     return f"""In 2-3 sentences, explain WHY this matters — the broader significance, implications, or why a researcher should care.\nTitle: {title}\nSnippet: {summary[:300]}"""
 
 def build_briefing_prompt(articles):
-    items = "\n".join([f"- [{a['topic']}] {a['title']}" for a in articles[:30]])
-    return f"""Write a personalised research briefing.\nARTICLES:\n{items}\n\n## 🌅 Today's Briefing\n## 🔑 Key Stories\n## 🧩 Emerging Themes\n## 📌 Worth Watching\nTone: concise, research-grade, insightful."""
+    items = []
+    for a in (articles or [])[:30]:
+        line = f"- [{a.get('topic','')}] {a.get('title','')}"
+        text = (a.get("extracted_text") or a.get("summary") or "").strip()
+        if text:
+            line += f" — {text[:200]}"
+        items.append(line)
+    items_str = "\n".join(items)
+    return (f"""Write a personalised research briefing.\nARTICLES:\n{items_str}\n\n"""
+            f"""## 🌅 Today's Briefing\n## 🔑 Key Stories\n## 🧩 Emerging Themes\n"""
+            f"""## 📌 Worth Watching\nTone: concise, research-grade, insightful. """
+            f"""Base claims on the provided text; do not invent facts not supported by the sources.""")
 
 def parse_explanation(text):
     followups = []
@@ -1554,15 +1617,33 @@ CATEGORIES = ["Read later","Key paper","Clinical relevance","Policy note","Inspi
 
 def is_bookmarked(url): return any(b["article"]["url"] == url for b in st.session_state.bookmarks)
 def add_bookmark(art, cat="Read later"):
+    art = fs.normalize_article(art)
     if not is_bookmarked(art["url"]):
         st.session_state.bookmarks.append({"article": art, "category": cat, "saved_at": datetime.now().strftime("%d %b %Y")})
-def remove_bookmark(url): st.session_state.bookmarks = [b for b in st.session_state.bookmarks if b["article"]["url"] != url]
+        uid = _auth_user_id()
+        if uid:
+            try:
+                import persistence as _p
+                _p.save_bookmark(uid, art, cat)
+            except Exception:
+                pass
+def remove_bookmark(url):
+    st.session_state.bookmarks = [b for b in st.session_state.bookmarks if b["article"]["url"] != url]
+    uid = _auth_user_id()
+    if uid:
+        try:
+            import persistence as _p
+            _p.remove_bookmark_persistent(uid, url)
+        except Exception:
+            pass
 def add_to_library(art):
+    normalized = fs.normalize_article(art)
     urls = {a["url"] for a in st.session_state.library}
-    if art.get("url") not in urls:
-        st.session_state.library.append({"title": art.get("title",""), "url": art.get("url","#"),
-            "topic": art.get("topic",""), "summary": art.get("summary","")[:200],
-            "ts": datetime.now().strftime("%Y-%m-%d %H:%M")})
+    if normalized.get("url") not in urls:
+        library_record = dict(normalized)
+        library_record["ts"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        library_record["summary"] = (library_record.get("summary") or "")[:200]
+        st.session_state.library.append(library_record)
 
 def get_tier():
     sub = st.session_state.get("subscription")
@@ -1612,6 +1693,9 @@ DEFAULTS = {
     "source_miss_count": {},       # {source_name: consecutive refreshes with 0 articles}
     "recent_sources": set(),       # sources seen in the previous refresh (for novelty)
     "negative_feedback": set(),    # "topic:source" keys the user marked less/not relevant
+    "auth_user_id": None,         # Supabase user ID when authenticated
+    "auth_email": None,           # Supabase user email when authenticated
+    "auth_screen": "none",        # none | login | register
     "disabled_subtypes": set(),    # "preference::subtype" keys the user disabled
     "followed_sources": set(),    # set of feed_urls the user has explicitly followed
     "discover_domain": "",        # last domain searched in Discover Sources
@@ -1642,6 +1726,8 @@ _nav = st.query_params
 _nav_changed = False
 if "ow_start" in _nav:
     st.session_state.screen = "role_select"; _nav_changed = True
+if "ow_auth" in _nav:
+    st.session_state.screen = "auth"; _nav_changed = True
 if "ow_role" in _nav:
     _rid = _nav["ow_role"]
     if _rid in {"student","competitive_exam","faculty","phd_researcher",
@@ -2823,6 +2909,7 @@ if st.session_state.screen == "welcome":
         <a href="#" style="color:#64748B;text-decoration:none;font-size:0.9rem;font-weight:500;">Features</a>
       </div>
       <a href="?ow_start=1" target="_self" style="background:#3B5FEF;color:#fff;text-decoration:none;border-radius:8px;padding:9px 22px;font-size:0.9rem;font-weight:600;font-family:inherit;display:inline-block;cursor:pointer;">Get started</a>
+      <a href="?ow_auth=1" target="_self" style="color:#3B5FEF;text-decoration:none;font-size:0.9rem;font-weight:600;padding:9px 12px;">Sign in</a>
     </nav>
     """, unsafe_allow_html=True)
 
@@ -3456,6 +3543,111 @@ if st.session_state.screen == "subtopics":
     st.stop()
 
 # ═══════════════════════════════════════════════════════════
+# SCREEN: AUTH (login / register)
+# ═══════════════════════════════════════════════════════════
+if st.session_state.screen == "auth":
+    st.markdown('<span class="ow-screen-welcome" style="display:none"></span>', unsafe_allow_html=True)
+    _, ac, _ = st.columns([1, 2, 1])
+    with ac:
+        st.markdown("### Sign in to Owlume")
+        tab_login, tab_register = st.tabs(["Sign in", "Create account"])
+        with tab_login:
+            email = st.text_input("Email", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            if st.button("Sign in", type="primary", key="do_login"):
+                import persistence as _p
+                result = _p.sign_in(email, password)
+                if result["success"]:
+                    st.session_state.auth_user_id = result["user_id"]
+                    st.session_state.auth_email = email
+                    st.session_state.screen = "feed"
+                    st.rerun()
+                else:
+                    st.error(result.get("error", "Sign in failed"))
+        with tab_register:
+            email = st.text_input("Email", key="reg_email")
+            password = st.text_input("Password", type="password", key="reg_password")
+            if st.button("Create account", type="primary", key="do_register"):
+                import persistence as _p
+                result = _p.sign_up(email, password)
+                if result["success"]:
+                    st.session_state.auth_user_id = result["user_id"]
+                    st.session_state.auth_email = email
+                    st.session_state.screen = "feed"
+                    st.rerun()
+                else:
+                    st.error(result.get("error", "Registration failed"))
+        if st.button("Back", key="auth_back"):
+            st.session_state.screen = "welcome"
+            st.rerun()
+    st.stop()
+
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+def _auth_user_id():
+    """Return the authenticated user ID, or None."""
+    uid = st.session_state.get("auth_user_id")
+    if uid:
+        return uid
+    try:
+        import persistence as _p
+        uid = _p.get_current_user_id()
+        if uid:
+            st.session_state.auth_user_id = uid
+            st.session_state.auth_email = _p.get_current_user_email()
+            return uid
+    except Exception:
+        pass
+    return None
+
+def _is_authenticated():
+    return _auth_user_id() is not None
+
+def _sign_out():
+    try:
+        import persistence as _p
+        _p.sign_out()
+    except Exception:
+        pass
+    st.session_state.auth_user_id = None
+    st.session_state.auth_email = None
+    st.session_state._data_loaded = False
+    st.session_state._bookmarks_loaded = False
+    st.session_state.bookmarks = []
+    st.session_state.selected_topics = []
+    st.session_state.custom_topics = []
+    st.session_state.subtopics = {}
+    st.session_state.discover_preferences = []
+    st.session_state.followed_sources = set()
+    st.session_state.negative_feedback = set()
+    st.session_state.read_articles = set()
+    st.session_state.alerts = []
+    st.session_state.local_city = ""
+    st.session_state.local_region = ""
+    st.session_state.local_interests = []
+    st.session_state.auth_screen = "none"
+
+
+# Load persisted bookmarks when authenticated.
+_uid = _auth_user_id()
+if _uid and not st.session_state.get("_bookmarks_loaded"):
+    try:
+        import persistence as _p
+        _loaded = _p.load_bookmarks(_uid)
+        if _loaded:
+            _arts = []
+            for _bm in _loaded:
+                _arts.append({"article": {"title": _bm.get("article_title", ""),
+                                          "url": _bm.get("article_url", ""),
+                                          "source": _bm.get("article_source", ""),
+                                          "topic": _bm.get("article_topic", ""),
+                                          "summary": _bm.get("article_summary", "")},
+                             "category": _bm.get("category", "Read later"),
+                             "saved_at": _bm.get("saved_at", "")})
+            st.session_state.bookmarks = _arts
+        st.session_state._bookmarks_loaded = True
+    except Exception:
+        pass
+
 # SCREEN: MAIN FEED
 # ═══════════════════════════════════════════════════════════
 all_t = all_topics_for_user()
@@ -3517,6 +3709,20 @@ if st.session_state.get("feed_pool_key") != _pool_key or st.session_state.get("f
         )
     # Track sources from this refresh for novelty in the next one.
     st.session_state.recent_sources = {a.get('source') for a in (_pool or []) if a.get('source')}
+
+    # Selective full-text extraction (optional, Trafilatura). Only top candidates
+    # are extracted; failures are recorded but never block the feed.
+    try:
+        _candidates = _ext.select_extraction_candidates(_pool, limit=5)
+        for _art in _candidates:
+            _url = _art.get("url", "")
+            if not _url or _ext.is_google_news_url(_url):
+                continue
+            _res = _ext.cached_extract(_url)
+            if _res.get("status") == _ext.STATUS_SUCCESS:
+                _ext.apply_extraction(_art, _res)
+    except Exception as _exc:
+        logger.warning("Extraction pass failed: %s", _exc)
     # Classify each article into discovery basket subtypes (cached on the record).
     _prefs = st.session_state.get("discover_preferences") or []
     for _a in (_pool or []):
@@ -4122,6 +4328,13 @@ with main_col:
                         else:
                             st.session_state.read_articles.add(url)
                             add_to_library(art)
+                            uid = _auth_user_id()
+                            if uid:
+                                try:
+                                    import persistence as _p
+                                    _p.save_read_article(uid, url)
+                                except Exception:
+                                    pass
                         st.rerun()
                 with la4:
                     if st.button("Ask", key=f"lask_{art_i}", use_container_width=True):
@@ -4356,21 +4569,21 @@ with main_col:
                         if st.button("AI summary", key=f"sum-{ak}", icon=":material/summarize:",
                                      help="3-sentence AI summary"):
                             with st.spinner("Summarising…"):
-                                result = _openai_call(build_summary_prompt(title, summary), mode="Digest")
+                                result = _openai_call(build_summary_prompt(title, summary, art.get("extracted_text")), mode="Digest")
                             st.session_state[f"inline_result_{ak}"] = _ai_display(result)
                             st.session_state[f"inline_type_{ak}"] = "summary"
                             st.rerun()
                         if st.button("Key takeaways", key=f"tkw-{ak}", icon=":material/key:",
                                      help="Key takeaways as bullet points"):
                             with st.spinner("Extracting takeaways…"):
-                                result = _openai_call(build_takeaways_prompt(title, summary), mode="Digest")
+                                result = _openai_call(build_takeaways_prompt(title, summary, art.get("extracted_text")), mode="Digest")
                             st.session_state[f"inline_result_{ak}"] = _ai_display(result)
                             st.session_state[f"inline_type_{ak}"] = "takeaways"
                             st.rerun()
                         if st.button("Why it matters", key=f"wim-{ak}", icon=":material/lightbulb:",
                                      help="Broader significance and implications"):
                             with st.spinner("Analysing significance…"):
-                                result = _openai_call(build_why_matters_prompt(title, summary), mode="Digest")
+                                result = _openai_call(build_why_matters_prompt(title, summary, art.get("extracted_text")), mode="Digest")
                             st.session_state[f"inline_result_{ak}"] = _ai_display(result)
                             st.session_state[f"inline_type_{ak}"] = "why_matters"
                             st.rerun()
@@ -4411,17 +4624,38 @@ with main_col:
                                              icon=":material/rss_feed:", help=f"Follow {_src_name}",
                                              use_container_width=True):
                                     st.session_state.followed_sources.add(_src_name)
+                                    uid = _auth_user_id()
+                                    if uid:
+                                        try:
+                                            import persistence as _p
+                                            _p.follow_source(uid, _src_name)
+                                        except Exception:
+                                            pass
                                     st.rerun()
                             _fb_key = f"{art.get('topic','')}::{_src_name}"
                             if st.button("Less like this", key=f"less-{ak}",
                                          icon=":material/thumb_down:", help="Show fewer like this",
                                          use_container_width=True):
                                 st.session_state.negative_feedback.add(_fb_key)
+                                uid = _auth_user_id()
+                                if uid:
+                                    try:
+                                        import persistence as _p
+                                        _p.save_negative_feedback(uid, _fb_key)
+                                    except Exception:
+                                        pass
                                 st.rerun()
                             if st.button("Not relevant", key=f"notrel-{ak}",
                                          icon=":material/block:", help="Mark as not relevant",
                                          use_container_width=True):
                                 st.session_state.negative_feedback.add(_fb_key)
+                                uid = _auth_user_id()
+                                if uid:
+                                    try:
+                                        import persistence as _p
+                                        _p.save_negative_feedback(uid, _fb_key)
+                                    except Exception:
+                                        pass
                                 st.rerun()
 
                 # Inline AI result — revealed on demand, cached in session state.

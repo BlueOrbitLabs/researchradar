@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import content_quality as cq
@@ -102,17 +102,19 @@ CONFIG = {
     },
 }
 
-# Freshness buckets: (max age in days, score). Unknown date -> UNKNOWN_FRESHNESS.
+# Freshness buckets: (max age in days, score). Unknown/invalid publication date
+# is omitted from the weighted score rather than represented as invented recency.
 FRESHNESS_BUCKETS = [(7, 1.0), (30, 0.9), (90, 0.75), (180, 0.6),
                      (365, 0.45), (730, 0.3)]
 KNOWN_FRESHNESS_FLOOR = 0.2
-UNKNOWN_FRESHNESS = 0.35
+UNKNOWN_FRESHNESS = None
 
 # Source-quality tiers (heuristic, documented rather than claimed as fact).
 QUALITY_TIERS = {
     0.85: (
-        "openalex", "pubmed", "europe pmc", "arxiv", "doaj", "crossref",
-        "nber", "doi.org", "who", "nih", ".gov", ".edu", "nature", "science",
+        # Named publishers / institutions only. Index/adapter names are not
+        # credibility evidence; unknown publishers remain at UNKNOWN_QUALITY.
+        "who", "nih", "nature", "science", ".gov", ".edu",
         "lancet", "jstor", "ssrn",
     ),
     0.65: (
@@ -122,8 +124,8 @@ QUALITY_TIERS = {
         "pib", "associated press", "financial times", "washington post",
     ),
 }
-UNKNOWN_QUALITY = 0.5
-MISSING_QUALITY = 0.4
+UNKNOWN_QUALITY = None
+MISSING_QUALITY = None
 
 # Onboarding preference labels -> content types they reward.
 PREFERENCE_TYPES = {
@@ -473,12 +475,23 @@ def adapt_all_baskets(interests, preferences, subtopics=None, role=None):
 # Metadata helpers
 # ─────────────────────────────────────────────────────────────────────────────
 def parse_date(value):
-    """Best-effort date parsing. Returns ``datetime`` or ``None``."""
-    text = (value or "").strip()
+    """Best-effort date parsing. Returns a naive ``datetime`` or ``None``."""
+    if isinstance(value, dict):
+        value = cq.publication_date_value(value)
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if hasattr(value, "year") and hasattr(value, "month") and hasattr(value, "day"):
+        try:
+            return datetime(value.year, value.month, value.day)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
     if not text:
         return None
-    candidates = [text, text[:10], text[:19]]
-    formats = ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%d %b %Y", "%d %B %Y",
+    candidates = [text, text[:19], text[:10]]
+    formats = ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m", "%d %b %Y", "%d %B %Y",
                "%b %d, %Y", "%B %d, %Y", "%Y-%m", "%B %Y", "%b %Y", "%Y")
     for candidate in candidates:
         for fmt in formats:
@@ -496,12 +509,16 @@ def parse_date(value):
 
 
 def freshness(date_value, today=None):
-    """Recency in [0.2, 1.0]; unknown/missing dates get a neutral 0.35."""
+    """Recency in [0.2, 1.0], or ``None`` when publication date is unknown."""
     parsed = parse_date(date_value)
     if parsed is None:
         return UNKNOWN_FRESHNESS
     today = today or datetime.now()
-    age_days = max(0.0, (today - parsed).total_seconds() / 86400.0)
+    if not isinstance(today, datetime):
+        today = datetime(today.year, today.month, today.day)
+    age_days = (today - parsed).total_seconds() / 86400.0
+    if age_days < 0:
+        return UNKNOWN_FRESHNESS
     for max_days, score in FRESHNESS_BUCKETS:
         if age_days <= max_days:
             return score
@@ -509,21 +526,33 @@ def freshness(date_value, today=None):
 
 
 def source_quality(article):
-    """Heuristic source credibility in [0.4, 0.85] — a tier, not a verdict.
+    """Conservative publisher-name heuristic; an index is not publisher proof.
 
-    Scholarly adapters now publish the journal as ``source`` and the index as
-    ``retrieved_via``; the index is evidence of quality, the journal is the
-    publisher used for diversity and corroboration.
+    ``retrieved_via`` is intentionally ignored. When publisher attribution is
+    missing or unresolved, return UNKNOWN_QUALITY rather than trusting an
+    aggregator/index label. This remains a weak ranking prior, not a factual
+    source-quality verdict.
     """
-    source = " ".join(filter(None, [
-        (article.get("source") or "").strip().lower(),
-        (article.get("retrieved_via") or "").strip().lower(),
-    ]))
+    source = (cq.publisher(article) or "").strip().lower()
     if not source:
         return MISSING_QUALITY
+    source_tokens = re.findall(r"[a-z0-9]+", source)
+    source_domain = str(article.get("publisher_domain") or article.get("source_domain") or "").lower().strip()
     for score, needles in QUALITY_TIERS.items():
-        if any(needle in source for needle in needles):
-            return score
+        for needle in needles:
+            if needle.startswith("."):
+                # A domain suffix is evidence only when supplied as a domain,
+                # not merely as a substring of a publisher display name.
+                if source_domain.endswith(needle):
+                    return score
+                continue
+            needle_tokens = re.findall(r"[a-z0-9]+", needle.lower())
+            if not needle_tokens:
+                continue
+            width = len(needle_tokens)
+            if any(source_tokens[i:i + width] == needle_tokens
+                   for i in range(len(source_tokens) - width + 1)):
+                return score
     return UNKNOWN_QUALITY
 
 
@@ -570,8 +599,11 @@ def preference_match(article, preferences, user_topics=None):
         ut = set(user_topics or [])
         art_topic = (article.get("topic") or "").strip()
         if ut and art_topic and art_topic not in ut:
-            # Cross-topic: add up to 0.3 (scaled by content quality).
-            base = min(1.0, base + 0.3 * source_quality(article))
+            # Cross-topic: quality can strengthen discovery only when there is
+            # actual publisher evidence. Unknown source quality adds no bonus.
+            quality = source_quality(article)
+            if quality is not None:
+                base = min(1.0, base + 0.3 * quality)
     return base
 
 
@@ -648,6 +680,130 @@ def canonical_url(url):
     return urlunsplit(("", host, path, urlencode(sorted(query)), "")).lstrip("/")
 
 
+def _canonical_url_value(url):
+    """Full URL form of the canonical identity key, for display/storage."""
+    key = canonical_url(url)
+    return f"https://{key}" if key else ""
+
+
+def _stable_article_id(doi, canonical, title, source):
+    """Stable id from DOI/URL identity, with title+publisher as last fallback."""
+    if doi:
+        identity = "doi:" + doi
+    elif canonical:
+        identity = "url:" + canonical
+    else:
+        identity = "title:" + " ".join(title_key(title)) + "|" + (source or "").lower().strip()
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
+
+
+def _retrieved_at_iso(value=None):
+    """Normalize an existing retrieval timestamp or make a UTC retrieval time.
+
+    This timestamp is deliberately separate from publication_date/date.
+    """
+    if value is None or value == "":
+        return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc).isoformat(timespec="seconds")
+        except (OverflowError, OSError, ValueError):
+            return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if isinstance(value, datetime):
+        moment = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return moment.astimezone(timezone.utc).isoformat(timespec="seconds")
+    return str(value).strip()
+
+
+def normalize_article(article, *, retrieved_at=None):
+    """Return a copy using Owlume's canonical article record contract.
+
+    Compatibility fields (`url` and `date`) remain intact for current UI and
+    rankers. Original/canonical URLs, publication and retrieval timestamps,
+    adapter provenance, classification provenance, matched-profile lists, and
+    metadata/extraction status are added without fabricating article content.
+    """
+    if not isinstance(article, dict):
+        return {}
+    result = dict(article)
+    result["title"] = str(result.get("title") or "").strip()
+    result["summary"] = str(result.get("summary") or "").strip()
+    result["source"] = str(result.get("source") or "").strip()
+    result["topic"] = str(result.get("topic") or "").strip()
+    result["date"] = str(result.get("date") or "").strip()
+    raw_url = str(result.get("original_url") or result.get("url") or "").strip()
+    if not result.get("url") and raw_url:
+        result["url"] = raw_url
+    result["original_url"] = raw_url
+
+    canonical = str(result.get("canonical_url") or _canonical_url_value(raw_url)).strip()
+    result["canonical_url"] = canonical
+
+    doi = extract_doi(result)
+    result["doi"] = doi
+
+    # `date` is retained as the historical UI/ranker alias. An RSS updated
+    # timestamp is explicitly not promoted to publication_date.
+    date_source = (result.get("date_source") or "").strip().lower()
+    pub_date = (result.get("publication_date") or "").strip()
+    if not pub_date and date_source != "updated":
+        pub_date = str(result.get("date") or "").strip()
+    result["publication_date"] = pub_date
+    if not result.get("date") and pub_date:
+        result["date"] = pub_date
+    result.setdefault("date_source", "published" if pub_date else (date_source or "unknown"))
+    result["updated_at"] = str(result.get("updated_at") or "").strip()
+    result["retrieval_topic"] = str(result.get("retrieval_topic") or result.get("topic") or "").strip()
+    result["retrieved_at"] = _retrieved_at_iso(
+        retrieved_at if retrieved_at is not None else result.get("retrieved_at"))
+
+    source_adapter = (result.get("source_adapter") or result.get("adapter")
+                      or result.get("retrieved_via") or "unknown")
+    result["source_adapter"] = str(source_adapter).strip().lower().replace(" ", "_")
+    adapters = list(result.get("source_adapters") or [])
+    if result["source_adapter"] != "unknown" and result["source_adapter"] not in adapters:
+        adapters.append(result["source_adapter"])
+    result["source_adapters"] = adapters
+
+    declared_type = str(result.get("content_type") or "").strip().lower()
+    if declared_type in {"research", "policy", "industry", "grants", "explainer", "news", "organisation"}:
+        result["content_type"] = declared_type
+        result.setdefault("content_type_source", "provider")
+    else:
+        result["content_type"] = infer_content_type(result)
+        result["content_type_source"] = "heuristic"
+
+    image = (result.get("image") or result.get("image_url")
+             or result.get("thumbnail_url") or result.get("top_image") or "")
+    result["image"] = str(image).strip() if image else ""
+    result["matched_interests"] = list(result.get("matched_interests") or [])
+    result["matched_subtopics"] = list(result.get("matched_subtopics") or [])
+    result["_subtypes"] = list(result.get("_subtypes") or [])
+    result["source_links"] = list(result.get("source_links") or [])
+    result["date_conflicts"] = list(result.get("date_conflicts") or [])
+    if raw_url and not result["source_links"]:
+        result["source_links"] = [{"source": result.get("source", ""), "url": raw_url}]
+
+    if not result.get("extraction_status"):
+        result["extraction_status"] = (
+            "provider_excerpt" if result.get("summary") else "metadata_only")
+    result["metadata_status"] = {
+        "title": bool(result.get("title")),
+        "url": bool(raw_url),
+        "publisher": bool(result.get("source")),
+        "publication_date": bool(pub_date),
+        "updated_at": bool(result["updated_at"]),
+        "summary": bool(result.get("summary")),
+        "doi": bool(doi),
+        "image": bool(result["image"]),
+        "content_type": bool(result.get("content_type")),
+        "source_adapter": result["source_adapter"] != "unknown",
+    }
+    result["id"] = str(result.get("id") or _stable_article_id(
+        doi, canonical, result.get("title", ""), result.get("source", "")))
+    return result
+
+
 def title_key(title):
     """Normalised token set used for the title-similarity fallback."""
     words = re.findall(r"[a-z0-9]+", (title or "").lower())
@@ -690,6 +846,29 @@ def _merge(into, other):
     ``sources`` list. That is the evidence Emerging uses for corroboration;
     it is metadata only and never rendered as a claim of a confirmed trend.
     """
+    # Normalize both sides first so aliases, URL identity, and metadata flags
+    # are preserved consistently when adapters collide.
+    into.update(normalize_article(into))
+    other = normalize_article(other)
+    into_date_record = {
+        "publication_date": into.get("publication_date") or "",
+        "source": into.get("source") or "",
+        "source_adapter": into.get("source_adapter") or "unknown",
+    }
+    other_date_record = {
+        "publication_date": other.get("publication_date") or "",
+        "source": other.get("source") or "",
+        "source_adapter": other.get("source_adapter") or "unknown",
+    }
+    provider_labels = {"openalex", "pubmed", "doaj", "crossref",
+                       "europe pmc", "google news", "google news india"}
+    into_source_is_index = (into.get("source") or "").strip().lower() in provider_labels
+    other_source_is_index = (other.get("source") or "").strip().lower() in provider_labels
+    if into_source_is_index and not other_source_is_index and other.get("source"):
+        # Prefer a publisher identity over an index/aggregator label. This is
+        # attribution cleanup, not a claim about the publisher's credibility.
+        into["source"] = other["source"]
+        into["source_adapter"] = other.get("source_adapter") or into.get("source_adapter")
     seen_sources = set(into.get("sources") or [])
     for article in (into, other):
         for name in (article.get("sources") or []) + [effective_source(article)]:
@@ -697,11 +876,57 @@ def _merge(into, other):
                 seen_sources.add(name)
     if len(seen_sources) > 1:
         into["sources"] = sorted(seen_sources)
-    for field in ("summary", "date", "source", "doi", "content_type"):
+    for field in ("date", "source", "doi", "content_type", "image", "retrieved_via",
+                  "source_adapter", "canonical_url", "publication_date", "updated_at",
+                  "date_source", "extraction_status", "content_type_source"):
         if not into.get(field) and other.get(field):
             into[field] = other[field]
+    for field in ("matched_interests", "matched_subtopics", "_subtypes"):
+        merged = list(into.get(field) or [])
+        for value in other.get(field) or []:
+            if value not in merged:
+                merged.append(value)
+        into[field] = merged
+    adapters = list(into.get("source_adapters") or [])
+    for adapter in other.get("source_adapters") or []:
+        if adapter not in adapters:
+            adapters.append(adapter)
+    into["source_adapters"] = adapters
+    # Keep the richest available abstract/snippet instead of permanently
+    # retaining an empty or shorter first-seen record.
+    if len(other.get("summary") or "") > len(into.get("summary") or ""):
+        into["summary"] = other["summary"]
+    if (other.get("content_type_source") == "provider"
+            and into.get("content_type_source") != "provider"):
+        into["content_type"] = other.get("content_type")
+        into["content_type_source"] = "provider"
+    current_pub = into.get("publication_date") or ""
+    other_pub = other.get("publication_date") or ""
+    if other_pub and current_pub and other_pub != current_pub:
+        conflicts = list(into.get("date_conflicts") or [])
+        for candidate in (into_date_record, other_date_record):
+            if candidate["publication_date"] and candidate not in conflicts:
+                conflicts.append(candidate)
+        into["date_conflicts"] = conflicts
+    if other_pub and (not current_pub or into.get("date_source") in {"updated", "unknown"}
+                      or (into_source_is_index and not other_source_is_index)):
+        into["publication_date"] = other_pub
+        into["date"] = other_pub
+        into["date_source"] = other.get("date_source", "published")
+    statuses = {"metadata_only": 0, "feed_excerpt": 1, "provider_excerpt": 1,
+                "abstract": 2, "full_text": 3}
+    if statuses.get(other.get("extraction_status"), 0) > statuses.get(into.get("extraction_status"), 0):
+        into["extraction_status"] = other["extraction_status"]
+    links = list(into.get("source_links") or [])
+    known_links = {entry.get("url") for entry in links if isinstance(entry, dict)}
+    for entry in other.get("source_links") or []:
+        if isinstance(entry, dict) and entry.get("url") and entry["url"] not in known_links:
+            links.append(entry)
+            known_links.add(entry["url"])
+    into["source_links"] = links
     into["relevance"] = max(into.get("relevance", 0.0) or 0.0,
                             other.get("relevance", 0.0) or 0.0)
+    into.update(normalize_article(into))
     return into
 
 
@@ -710,7 +935,10 @@ def dedupe_articles(articles):
     by_doi, by_url, seen_titles, out = {}, {}, [], []
 
     for article in articles or []:
-        if not isinstance(article, dict) or not (article.get("title") or article.get("url")):
+        if not isinstance(article, dict):
+            continue
+        article = normalize_article(article)
+        if not (article.get("title") or article.get("url")):
             continue
         doi = extract_doi(article)
         if doi and doi in by_doi:
@@ -766,7 +994,19 @@ def apply_diversity(scored, max_per_source=3, max_per_topic=4, limit=25):
 
 
 def _weighted(features, weights):
-    return sum(weights.get(name, 0.0) * value for name, value in features.items())
+    """Weighted mean over available signals; unknown metadata contributes none.
+
+    Renormalizing over observed feature weights means missing credibility or
+    publication-date evidence is neither assigned a fabricated score nor an
+    implicit penalty.
+    """
+    available = [(weights.get(name, 0.0), value)
+                 for name, value in features.items()
+                 if value is not None and weights.get(name, 0.0) > 0]
+    weight_sum = sum(weight for weight, _ in available)
+    if not weight_sum:
+        return 0.0
+    return sum(weight * value for weight, value in available) / weight_sum
 
 
 def _relevance(article):
@@ -837,12 +1077,16 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
     cfg = CONFIG["for_you"]
     user_topics = set(topics or [])
     today = today or datetime.now()
+    if not isinstance(today, datetime):
+        today = datetime(today.year, today.month, today.day)
     discovery_cutoff = cfg["discovery_max_age_days"]
 
     def is_current_discovery(article):
-        published = parse_date(article.get("date"))
-        return (published is not None
-                and (today - published).days <= discovery_cutoff)
+        published = parse_date(cq.publication_date_value(article))
+        if published is None:
+            return False
+        age = (today - published).days
+        return 0 <= age <= discovery_cutoff
 
     user_scored, discovery_scored = [], []
     for article in _eligible(pool, cfg["min_relevance"]):
@@ -850,7 +1094,7 @@ def rank_for_you(pool, topics, subtopics, preferences=(), role=None, today=None,
             "relevance": _relevance(article),
             "subtopic": _subtopic_for(article, subtopics),
             "preference": preference_match(article, preferences, user_topics),
-            "freshness": freshness(article.get("date"), today),
+            "freshness": freshness(cq.publication_date_value(article), today),
             "quality": source_quality(article),
             "profile": profile_affinity(article, role),
         }
@@ -910,7 +1154,7 @@ def rank_my_fields(pool, topics, subtopics, preferences=(), role=None,
             "relevance": _relevance(article),
             "subtopic": _subtopic_for(article, subtopics),
             "preference": preference_match(article, preferences, user_topics),
-            "freshness": freshness(article.get("date"), today),
+            "freshness": freshness(cq.publication_date_value(article), today),
             "quality": source_quality(article),
             "profile": profile_affinity(article, role),
         }
@@ -985,13 +1229,16 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
     """
     cfg = CONFIG["emerging"]
     today = today or datetime.now()
+    if not isinstance(today, datetime):
+        today = datetime(today.year, today.month, today.day)
     max_age = cfg["max_age_days"]
 
     def is_recent(article):
-        published = parse_date(article.get("date"))
+        published = parse_date(cq.publication_date_value(article))
         if published is None:
             return False
-        return (today - published).days <= max_age
+        age = (today - published).days
+        return 0 <= age <= max_age
 
     articles = [a for a in _eligible(pool, cfg["min_relevance"]) if is_recent(a)]
     user_topics = set(topics or [])
@@ -999,7 +1246,7 @@ def rank_emerging(pool, topics, subtopics, preferences=(), role=None, today=None
     scored = []
     for article in articles:
         features = {
-            "freshness": freshness(article.get("date"), today),
+            "freshness": freshness(cq.publication_date_value(article), today),
             "corroboration": corroboration.get(id(article), 0.0),
             "quality": source_quality(article),
             "relevance": _relevance(article),
@@ -1048,7 +1295,7 @@ def rank_broaden(pool, topics, subtopics, preferences=(), role=None,
 
     def score(article):
         features = {
-            "freshness": freshness(article.get("date"), today),
+            "freshness": freshness(cq.publication_date_value(article), today),
             "quality": source_quality(article),
             "preference": preference_match(article, preferences, user_topics),
             "relevance": _relevance(article),
@@ -1118,7 +1365,9 @@ def build_pool(loader, topics, subtopics_by_topic=None, discovery_topics=(),
     pool, errors = [], []
     seen_topics = set()
 
-    for topic in list(selected) + [t for t in (discovery_topics or []) if t not in selected]:
+    safe_discovery = [t for t in (discovery_topics or [])
+                      if t not in selected and t != "Local News & Community"]
+    for topic in list(selected) + safe_discovery:
         if topic in seen_topics:
             continue
         seen_topics.add(topic)
@@ -1130,7 +1379,9 @@ def build_pool(loader, topics, subtopics_by_topic=None, discovery_topics=(),
         for article in articles:
             if not isinstance(article, dict):
                 continue
+            article = normalize_article(article)
             article.setdefault("topic", topic)
+            article.setdefault("retrieval_topic", topic)
             # Re-validate: a loader may add records that bypassed the adapter
             # gate (e.g. a followed source), and generic pages must never reach
             # ranking or briefing counts.
@@ -1145,6 +1396,26 @@ def build_pool(loader, topics, subtopics_by_topic=None, discovery_topics=(),
             # strategy, so it is not allowed to consume pool or briefing budget.
             if relevance < cq.RELEVANCE["min_broaden"]:
                 continue
+            retrieval_topic = article.get("topic") or topic
+            article.setdefault("retrieval_topic", retrieval_topic)
+            # Map category-expanded queries (for example "Health & Medicine
+            # fellowship") back to the selected parent interest without
+            # claiming a match for unrelated outside-discovery candidates.
+            matched_interest = next((selected_topic for selected_topic in selected
+                                     if retrieval_topic.lower() == selected_topic.lower()
+                                     or retrieval_topic.lower().startswith(selected_topic.lower() + " ")),
+                                    None)
+            if matched_interest:
+                matches = list(article.get("matched_interests") or [])
+                if matched_interest not in matches:
+                    matches.append(matched_interest)
+                article["matched_interests"] = matches
+                matched_subtopics = list(article.get("matched_subtopics") or [])
+                for subtopic in per_topic.get(matched_interest) or []:
+                    if subtopic_match(article, [subtopic]) > 0 and subtopic not in matched_subtopics:
+                        matched_subtopics.append(subtopic)
+                article["matched_subtopics"] = matched_subtopics
+            article = normalize_article(article)
             pool.append(article)
 
     return dedupe_articles(pool), errors

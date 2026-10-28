@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+.streamlit/secrets.toml
+owlume.db
+*.db
+node_modules/

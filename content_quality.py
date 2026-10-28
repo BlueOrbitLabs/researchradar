@@ -384,6 +384,21 @@ def explain_relevance(article, topic, subtopics=(), keywords=(),
     phrase = _phrase_pattern(topic)
     phrase_title = bool(phrase and title and phrase.search(title))
     phrase_summary = bool(phrase and summary and phrase.search(summary))
+    lifestyle_hit = bool(
+        lifestyle_penalty
+        and _COMPILED_LIFESTYLE.search((article.get("title") or "") + " "
+                                       + (article.get("summary") or ""))
+    )
+    # Deterministic synonym/alias experiment: a multiword curated catalogue
+    # keyword (e.g. "artificial intelligence") can stand for a short UI label
+    # (e.g. "AI & Technology"). Reuse existing phrase weights; do not add a
+    # new weight or call a model per article. Exact topic phrases take
+    # precedence so an alias is not counted twice.
+    phrase_aliases = [term for term in keywords
+                      if len(_tokens(term)) > 1
+                      and normalise(term) != normalise(topic)]
+    alias_title = bool(not phrase_title and not lifestyle_hit and _hits(phrase_aliases, title))
+    alias_summary = bool(not phrase_summary and not lifestyle_hit and _hits(phrase_aliases, summary))
     coverage_title = topic_coverage(topic, title)
     coverage_summary = topic_coverage(topic, summary)
     keyword_title = _hits(keywords, title)
@@ -396,9 +411,9 @@ def explain_relevance(article, topic, subtopics=(), keywords=(),
     term_summary = _hits(terms, summary)
 
     score = 0.0
-    if phrase_title:
+    if phrase_title or alias_title:
         score += RELEVANCE["phrase_title"]
-    elif phrase_summary:
+    elif phrase_summary or alias_summary:
         score += RELEVANCE["phrase_summary"]
     score += RELEVANCE["coverage_title"] * coverage_title
     score += RELEVANCE["coverage_summary"] * coverage_summary
@@ -418,6 +433,7 @@ def explain_relevance(article, topic, subtopics=(), keywords=(),
     # A single shared keyword is not enough for a *strong* claim.
     strong = (
         phrase_title
+        or alias_title
         or coverage_title >= 0.999
         or subtopic_title > 0
         or core_title > 0
@@ -425,6 +441,12 @@ def explain_relevance(article, topic, subtopics=(), keywords=(),
     )
     if score > 0 and not strong:
         score = min(score, RELEVANCE["weak_cap"])
+    # A curated multi-word subject alias in the publisher's title/summary is
+    # enough evidence for Relevant, but never High, when the UI category uses
+    # a different short label. Keep the floor at the existing Relevant
+    # threshold rather than adding another tuned weight.
+    if alias_summary and not alias_title:
+        score = max(score, RELEVANCE["relevant"])
     # Titles that only echo the category name are not strong matches either.
     generic_shape = _title_is_generic_shape(article.get("title"), topic)
     if generic_shape:
@@ -433,11 +455,6 @@ def explain_relevance(article, topic, subtopics=(), keywords=(),
     if topic_echo:
         score = min(score, RELEVANCE["topic_echo_cap"])
     # Human-interest/consumer framing is weaker evidence than subject reporting.
-    lifestyle_hit = bool(
-        lifestyle_penalty
-        and _COMPILED_LIFESTYLE.search((article.get("title") or "") + " "
-                                       + (article.get("summary") or ""))
-    )
     if lifestyle_hit:
         score = max(0.0, score - RELEVANCE["lifestyle_penalty"])
     # Index scope is evidence of topical fit, but only enough for "Relevant"
@@ -458,6 +475,8 @@ def explain_relevance(article, topic, subtopics=(), keywords=(),
         "signals": {
             "phrase_title": phrase_title,
             "phrase_summary": phrase_summary,
+            "alias_title": alias_title,
+            "alias_summary": alias_summary,
             "coverage_title": round(coverage_title, 3),
             "coverage_summary": round(coverage_summary, 3),
             "keyword_title": keyword_title,
@@ -497,6 +516,34 @@ def relevance_label(score):
     return None
 
 
+def local_relevance_score(article, city, region="", interests=()):
+    """Score an article against the active app's location/interest signals.
+
+    This extracts the existing local-news scoring rule into a pure function so
+    fixture baselines can exercise the production behavior without network I/O.
+    It deliberately preserves the current weights and national-story penalty.
+    """
+    text = " ".join((article.get("title", ""), article.get("summary", ""))).lower()
+    city_lower = (city or "").lower()
+    region_lower = (region or "").lower()
+    score = 0.0
+    if city_lower and city_lower in text:
+        score += 0.5
+    if region_lower and region_lower in text:
+        score += 0.2
+    for interest in interests or ():
+        prefix = (interest or "").lower()[:6]
+        if prefix and prefix in text:
+            score += 0.1
+    national_words = ["india", "government of india", "parliament",
+                      "supreme court of india"]
+    location_terms = [city_lower] + ([region_lower] if region_lower else [])
+    if not any(term and term in text for term in location_terms):
+        if any(word in text for word in national_words):
+            score -= 0.1
+    return round(min(1.0, max(0.0, score)), 3)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Publisher identity
 # ─────────────────────────────────────────────────────────────────────────────
@@ -518,13 +565,35 @@ def publisher(article):
 # ─────────────────────────────────────────────────────────────────────────────
 # Dates and briefing
 # ─────────────────────────────────────────────────────────────────────────────
-_DATE_FORMATS = ("%Y-%m-%d", "%d %b %Y", "%d %B %Y", "%b %d, %Y",
+_DATE_FORMATS = ("%Y-%m-%d", "%Y-%m", "%d %b %Y", "%d %B %Y", "%b %d, %Y",
                  "%B %d, %Y", "%Y/%m/%d", "%B %Y", "%b %Y", "%Y")
+
+
+def publication_date_value(article):
+    """Publication date only; never substitute RSS update/retrieval time.
+
+    Legacy records without ``publication_date`` continue to use ``date`` unless
+    the adapter explicitly marks that value as an RSS update timestamp.
+    """
+    if not isinstance(article, dict):
+        return ""
+    published = article.get("publication_date")
+    if published:
+        return published
+    if (article.get("date_source") or "").strip().lower() == "updated":
+        return ""
+    return article.get("date") or ""
 
 
 def parse_date(value):
     """Parse the date shapes produced by the adapters; ``None`` if unknown."""
-    text = (value or "").strip()
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
     if not text:
         return None
     text = re.sub(r"\s+", " ", text)
@@ -589,7 +658,7 @@ def briefing_articles(pool, days=None, limit=3, today=None, preferences=None, ro
         if relevance < RELEVANCE["min_briefing"]:
             rejected["low_relevance"] += 1
             continue
-        published = parse_date(article.get("date"))
+        published = parse_date(publication_date_value(article))
         if not published:
             rejected["unknown_date"] += 1
             continue
