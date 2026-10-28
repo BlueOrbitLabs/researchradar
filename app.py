@@ -3225,6 +3225,14 @@ if st.session_state.screen == "interests":
             has_topics = len(all_topics_for_user()) > 0
             if st.button("Continue →", type="primary", use_container_width=True, key="ob_next",
                          disabled=not has_topics):
+                uid = _auth_user_id()
+                if uid:
+                    try:
+                        import persistence as _p
+                        _p.save_interests(uid, all_topics_for_user())
+                        _p.save_subtopics(uid, st.session_state.subtopics)
+                    except Exception:
+                        pass
                 st.session_state.screen = "discover_prefs"; st.rerun()
     st.stop()
 
@@ -3284,6 +3292,14 @@ if st.session_state.screen == "discover_prefs":
                 st.session_state.screen = "interests"; st.rerun()
         with nav2:
             if st.button("Continue →", type="primary", use_container_width=True, key="pref_next"):
+                uid = _auth_user_id()
+                if uid:
+                    try:
+                        import persistence as _p
+                        _p.save_preferences(uid, st.session_state.discover_preferences,
+                                           list(st.session_state.get("disabled_subtypes", set())))
+                    except Exception:
+                        pass
                 st.session_state.screen = "local_setup"; st.rerun()
         with nav3:
             if st.button("Skip", key="pref_skip"):
@@ -3624,14 +3640,29 @@ def _sign_out():
     st.session_state.local_city = ""
     st.session_state.local_region = ""
     st.session_state.local_interests = []
+    st.session_state._data_loaded = False
+    st.session_state._bookmarks_loaded = False
+    st.session_state.bookmarks = []
+    st.session_state.selected_topics = []
+    st.session_state.custom_topics = []
+    st.session_state.subtopics = {}
+    st.session_state.discover_preferences = []
+    st.session_state.followed_sources = set()
+    st.session_state.negative_feedback = set()
+    st.session_state.read_articles = set()
+    st.session_state.alerts = []
+    st.session_state.local_city = ""
+    st.session_state.local_region = ""
+    st.session_state.local_interests = []
     st.session_state.auth_screen = "none"
 
 
-# Load persisted bookmarks when authenticated.
+# Load persisted data when authenticated.
 _uid = _auth_user_id()
-if _uid and not st.session_state.get("_bookmarks_loaded"):
+if _uid and not st.session_state.get("_data_loaded"):
     try:
         import persistence as _p
+        # Bookmarks
         _loaded = _p.load_bookmarks(_uid)
         if _loaded:
             _arts = []
@@ -3644,6 +3675,45 @@ if _uid and not st.session_state.get("_bookmarks_loaded"):
                              "category": _bm.get("category", "Read later"),
                              "saved_at": _bm.get("saved_at", "")})
             st.session_state.bookmarks = _arts
+        # Interests
+        _interests = _p.load_interests(_uid)
+        if _interests:
+            st.session_state.selected_topics = _interests
+        # Subtopics
+        _subs = _p.load_subtopics(_uid)
+        if _subs:
+            st.session_state.subtopics = _subs
+        # Preferences
+        _prefs = _p.load_preferences(_uid)
+        if _prefs.get("preferences"):
+            st.session_state.discover_preferences = _prefs["preferences"]
+        if _prefs.get("disabled_subtypes"):
+            st.session_state.disabled_subtypes = set(_prefs["disabled_subtypes"])
+        # Followed sources
+        _followed = _p.load_followed_sources(_uid)
+        if _followed:
+            st.session_state.followed_sources = _followed
+        # Negative feedback
+        _nf = _p.load_negative_feedback(_uid)
+        if _nf:
+            st.session_state.negative_feedback = _nf
+        # Read articles
+        _read = _p.load_read_articles(_uid)
+        if _read:
+            st.session_state.read_articles = _read
+        # Alerts
+        _alerts = _p.load_alerts(_uid)
+        if _alerts:
+            st.session_state.alerts = _alerts
+        # Local config
+        _local = _p.load_local_config(_uid)
+        if _local.get("city"):
+            st.session_state.local_city = _local["city"]
+        if _local.get("region"):
+            st.session_state.local_region = _local["region"]
+        if _local.get("interests"):
+            st.session_state.local_interests = _local["interests"]
+        st.session_state._data_loaded = True
         st.session_state._bookmarks_loaded = True
     except Exception:
         pass
