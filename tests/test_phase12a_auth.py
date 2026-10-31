@@ -245,6 +245,8 @@ class PersistenceRegressionTest(unittest.TestCase):
 
     def test_interests_save_calls_supabase(self):
         m = self._mock()
+        # Simulate RPC not deployed -> fallback to delete+insert.
+        m.rpc.return_value.execute.side_effect = Exception("Could not find the function public.replace_user_interests")
         with patch.object(persistence, "_get_client", return_value=m):
             self.assertTrue(persistence.save_interests("user-1", ["Health", "AI"]))
             m.table.assert_any_call("user_interests")
